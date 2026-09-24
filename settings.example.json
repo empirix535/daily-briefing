@@ -1,0 +1,17 @@
+{
+    "_help": "Copy this file to settings.json (Install.cmd does it for you) and fill in your details. settings.json stays on your PC and is not uploaded to GitHub.",
+    "UserName": "Alex",
+    "UserDescription": "a researcher at Example Org",
+    "SignOff": "Best,",
+    "SignName": "Alex",
+    "InternalDomains": [ "example.org" ],
+
+    "_help_models": "haiku is fastest; sonnet gives better answers but is slower and uses more of your Claude limit.",
+    "ClaudeModel": "haiku",
+    "CatchupModel": "sonnet",
+    "AssistantModel": "haiku",
+
+    "_help_other": "CloseOutlookOnExit quits Outlook when you close the dashboard (never while a draft window is open). Port only needs changing if 8000 is taken.",
+    "CloseOutlookOnExit": true,
+    "Port": 8000
+}

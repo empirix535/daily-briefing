@@ -1,0 +1,24 @@
+# Personal data and settings: never upload
+data/
+settings.json
+old/
+backup-*/
+Application DIRECTORY IDs.txt
+
+# Built on each PC by Install.cmd
+DailyBriefing.exe
+
+# Leftovers from the older single-folder layout
+todo.json
+triage-cache.json
+lastseen.json
+catchup.json
+*.log
+*.bak.ps1
+check_models.ps1
+launch_dashboard.vbs
+
+# Archives and Windows clutter
+*.zip
+Thumbs.db
+desktop.ini

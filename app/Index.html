@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Briefing</title>
+    <link rel="icon" type="image/png" sizes="256x256" href="/icons/agenda-256.png?v=2">
+    <link rel="icon" href="/icons/agenda.ico?v=2">
+    <meta name="theme-color" content="#1f1e1d">
+    <meta name="application-name" content="Daily Briefing">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #1f1e1d;
+            --surface: #262624;
+            --surface-2: #2d2c29;
+            --inset: #1a1917;
+            --border: #3a3935;
+            --border-strong: #4d4b46;
+            --text-main: #f4f2ec;
+            --text-sub: #a8a59c;
+            --text-faint: #7a776f;
+            --accent: #d97757;
+            --accent-soft: rgba(217, 119, 87, 0.14);
+            --accent-hover: #e58a6c;
+            --info: #8fb3d4;
+            --info-soft: rgba(143, 179, 212, 0.13);
+            --success: #8cbf8a;
+            --success-soft: rgba(140, 191, 138, 0.12);
+            --font-ui: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            --font-display: 'Source Serif 4', Georgia, serif;
+        }
+
+        /* Scales all rem sizes: ~15px on 1920 wide, ~18px on 3440 wide */
+        html { font-size: clamp(15px, calc(12px + 0.175vw), 19px); }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-ui);
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding: 1.75rem 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.4rem;
+            min-height: 100vh;
+            font-size: 1rem;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        button, input, textarea { font-family: inherit; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 600; letter-spacing: -0.01em; }
+        .sub-header { font-size: 0.95rem; color: var(--text-sub); margin-top: 0.2rem; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            background: var(--success-soft);
+            color: var(--success);
+            padding: 0.3rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(140, 191, 138, 0.25);
+            margin-right: 0.8rem;
+        }
+        .status-dot { width: 0.5rem; height: 0.5rem; background: var(--success); border-radius: 50%; }
+
+        .btn-refresh {
+            background: var(--surface);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 0.55rem 1.1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .btn-refresh:hover { border-color: var(--border-strong); background: var(--surface-2); }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.8rem;
+            padding: 1.3rem 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        /* --- TIMELINE (1D axis) --- */
+        .tl-head { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 0.4rem; }
+        .tl-head .card-title { margin-bottom: 0; }
+        .tl-allday { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .tl-chip {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.15rem 0.65rem;
+        }
+
+        .tl-inner { position: relative; margin: 0 1.5rem; }
+        .tl-labels { position: relative; height: 2.5rem; }
+        .tl-axis-zone { position: relative; height: 2.9rem; }
+
+        .tl-axis {
+            position: absolute;
+            left: 0; right: 0;
+            top: 0.75rem;
+            height: 2px;
+            background: var(--border-strong);
+            border-radius: 1px;
+        }
+
+        .tl-tick {
+            position: absolute;
+            top: calc(0.75rem - 4px);
+            width: 1px;
+            height: 10px;
+            background: var(--border-strong);
+        }
+        .tl-tick-label {
+            position: absolute;
+            top: 1.45rem;
+            transform: translateX(-50%);
+            font-size: 0.85rem;
+            color: var(--text-faint);
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tl-seg {
+            position: absolute;
+            top: calc(0.75rem - 5px);
+            height: 12px;
+            background: var(--accent);
+            border-radius: 6px;
+            opacity: 0.9;
+            min-width: 4px;
+            box-shadow: 0 0 0 2px var(--surface);   /* separates back-to-back or overlapping meetings */
+            cursor: default;
+        }
+        .tl-seg::before {
+            content: '';
+            position: absolute;
+            inset: -8px 0;   /* taller invisible hover area */
+        }
+
+        .tl-label {
+            position: absolute;
+            padding: 0.3rem 0.55rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-bottom: 2px solid var(--accent);
+            border-radius: 0.4rem 0.4rem 0.2rem 0.2rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            line-height: 1.25;
+            color: var(--text-main);
+            box-sizing: border-box;
+            /* whole words only; long titles stop at 2 lines with an ellipsis (hover for the full title) */
+            overflow-wrap: normal;
+            word-break: normal;
+            hyphens: none;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+            z-index: 2;
+        }
+        .tl-label.measuring { display: block; white-space: nowrap; width: auto !important; -webkit-line-clamp: unset; }
+        /* Meeting states: past meetings fade, the current one glows */
+        .tl-seg, .tl-label, .tl-leader { transition: opacity 0.4s ease, box-shadow 0.4s ease, background 0.4s ease; }
+        .tl-seg.past { opacity: 0.35; }
+        .tl-label.past { opacity: 0.4; }
+        .tl-leader.past { opacity: 0.35; }
+        .tl-seg.current { opacity: 1; box-shadow: 0 0 0 2px var(--surface), 0 0 10px 2px rgba(217, 119, 87, 0.6); }
+        .tl-label.current { background: rgba(217, 119, 87, 0.16); border-color: var(--accent); }
+        .tl-status { margin-left: auto; font-size: 0.85rem; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+        .tl-status b { color: var(--accent-hover); font-weight: 600; }
+
+        /* Extra rows for overlapping meetings (Gantt-style), stacked just above the axis */
+        .tl-lanes { position: relative; height: 0; }
+        .tl-lanes .tl-seg { top: auto; }
+        .tl-leader {
+            position: absolute;
+            width: 1px;
+            background: var(--border-strong);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* "Now" marker: glowing dot centered on the axis line */
+        .now-line {
+            position: absolute;
+            bottom: calc(2.15rem - 1px - 7px);
+            width: 14px;
+            height: 14px;
+            margin-left: -7px;
+            border-radius: 50%;
+            background: var(--text-main);
+            box-shadow: 0 0 6px 2px rgba(244, 242, 236, 0.55), 0 0 16px 4px rgba(217, 119, 87, 0.45);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* --- TABS --- */
+        .tabs {
+            display: flex;
+            gap: 1.75rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.3rem;
+        }
+
+        .tab {
+            padding-bottom: 0.7rem;
+            color: var(--text-sub);
+            font-size: 1.05rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s ease;
+        }
+        .tab:hover { color: var(--text-main); }
+
+        .tab.active {
+            color: var(--text-main);
+            border-bottom-color: var(--accent);
+        }
+
+        /* --- INBOX PANELS --- */
+        .inbox-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.3rem;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.7rem;
+            padding: 1.1rem;
+        }
+
+        .panel-req { border-top: 3px solid var(--accent); }
+        .panel-fyi { border-top: 3px solid var(--info); }
+
+        .panel-header {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .panel-req .panel-header { color: var(--accent); }
+        .panel-fyi .panel-header { color: var(--info); }
+
+        .email-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 0.6rem;
+            padding: 1rem 1.1rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .email-subject { font-size: 1.02rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.35rem; }
+        .email-task { font-size: 0.95rem; color: var(--accent); font-weight: 500; margin-bottom: 0.5rem; }
+        .panel-fyi .email-task { color: var(--info); }
+
+        .play-list {
+            padding-left: 1.2rem;
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            margin-bottom: 0.4rem;
+        }
+        .play-list li { margin-bottom: 0.2rem; }
+
+        /* Take action toggle */
+        .card-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap; }
+
+        .unread-badge {
+            display: inline-block;
+            margin-left: 0.6rem;
+            padding: 0.05rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            vertical-align: middle;
+            color: var(--accent-hover);
+            background: var(--accent-soft);
+        }
+        .panel-fyi .unread-badge { color: var(--info); background: var(--info-soft); }
+
+        .thread-list { list-style: none; margin: 0.2rem 0 0.5rem; padding-left: 0.2rem; border-left: 2px solid var(--border); }
+        .thread-list li { padding: 0.2rem 0 0.35rem 0.75rem; }
+        .thread-from { font-size: 0.88rem; font-weight: 600; color: var(--text-main); }
+        .thread-time { font-size: 0.8rem; color: var(--text-faint); margin-left: 0.5rem; font-variant-numeric: tabular-nums; }
+        .thread-sum { font-size: 0.9rem; color: var(--text-sub); }
+
+        .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.3rem 0 0.5rem; }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            max-width: 100%;
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--inset);
+            color: var(--text-main);
+            font-size: 0.84rem;
+            text-decoration: none;
+            cursor: pointer;
+            transition: border-color 0.15s ease, color 0.15s ease;
+        }
+        .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22rem; }
+        .chip svg { flex-shrink: 0; }
+        .chip-link { color: var(--info); }
+        .chip-link:hover { border-color: var(--info); }
+        .chip-att:hover { border-color: var(--border-strong); }
+        .chip-att.busy { opacity: 0.6; cursor: wait; }
+        .chip-size { color: var(--text-faint); font-size: 0.76rem; }
+        .btn-take-action {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-sub);
+            border-radius: 0.4rem;
+            padding: 0.3rem 0.8rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-take-action:hover { color: var(--text-main); border-color: var(--border-strong); }
+        .btn-take-action.open { color: var(--text-main); background: var(--surface); }
+        .btn-clear:hover { color: var(--success); border-color: var(--success); }
+        .email-card { transition: opacity 0.25s ease, transform 0.25s ease; }
+        .email-card.clearing { opacity: 0; transform: translateX(12px); }
+        .action-panel { margin-top: 0.6rem; }
+
+        .control-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+        textarea.input-prompt {
+            resize: vertical;
+            min-height: 2.3rem;
+            line-height: 1.4;
+            overflow-y: hidden;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .input-prompt {
+            flex: 1;
+            background: var(--inset);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            border-radius: 0.4rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.9rem;
+        }
+        .input-prompt::placeholder { color: var(--text-faint); }
+        .input-prompt:focus { outline: none; border-color: var(--border-strong); }
+
+        .btn-action {
+            background: var(--accent-soft);
+            border: 1px solid var(--accent);
+            color: var(--accent-hover);
+            padding: 0.5rem 1rem;
+            border-radius: 0.4rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-action:hover { background: var(--accent); color: #1f1e1d; }
+        .btn-action:disabled { opacity: 0.6; cursor: wait; }
+        .btn-ask { background: var(--info-soft); border-color: var(--info); color: var(--info); }
+        .btn-ask:hover { background: var(--info); color: #1f1e1d; }
+
+        .ai-answer {
+            margin-top: 0.7rem;
+            padding: 0.75rem 0.9rem;
+            background: var(--inset);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--info);
+            border-radius: 0.4rem;
+            font-size: 0.92rem;
+            line-height: 1.55;
+        }
+        .ai-q { font-size: 0.85rem; color: var(--text-sub); margin-bottom: 0.4rem; white-space: pre-wrap; }
+        .ai-a { white-space: pre-wrap; color: var(--text-main); }
+        .last-updated { font-size: 0.85rem; color: var(--text-faint); margin-right: 0.8rem; }
+
+        .muted { color: var(--text-sub); font-size: 0.92rem; }
+
+        /* --- RUNNING NOTES (CHECKLIST) --- */
+        .todo-toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .todo-toolbar .input-prompt { font-size: 0.95rem; padding: 0.55rem 0.75rem; }
+        .todo-item { margin-bottom: 0.2rem; }
+        .todo-child { margin-left: 1.9rem; }
+        .todo-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.5rem;
+            border-radius: 0.4rem;
+        }
+        .todo-row:hover { background: var(--surface-2); }
+        .todo-row:hover .todo-btn { opacity: 1; }
+        .todo-row input[type=checkbox] { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .todo-text {
+            flex: 1;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-main);
+            font-size: 1rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.3rem;
+        }
+        .todo-text:focus { outline: none; border-color: var(--border); background: var(--inset); }
+        .todo-parent > .todo-row .todo-text { font-weight: 600; }
+        .todo-text.done { text-decoration: line-through; color: var(--text-faint); }
+        .todo-count { font-size: 0.8rem; color: var(--text-faint); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+        .todo-btn {
+            opacity: 0;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-sub);
+            border-radius: 0.3rem;
+            font-size: 0.82rem;
+            padding: 0.15rem 0.55rem;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .todo-btn:hover { color: var(--text-main); border-color: var(--border-strong); }
+
+        /* --- TOMORROW --- */
+        .agenda-row {
+            display: flex;
+            gap: 1.1rem;
+            padding: 0.8rem 1rem;
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 0.5rem;
+            background: var(--surface-2);
+            margin-bottom: 0.6rem;
+        }
+        .agenda-time { width: 11rem; flex-shrink: 0; font-size: 0.95rem; color: var(--accent-hover); font-weight: 500; font-variant-numeric: tabular-nums; }
+        .agenda-subject { font-size: 1rem; font-weight: 600; }
+        .agenda-loc { font-size: 0.88rem; color: var(--text-sub); margin-top: 0.15rem; }
+
+        /* --- SERVER STOPPED OVERLAY --- */
+        .server-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(20, 19, 18, 0.82);
+            backdrop-filter: blur(3px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .server-overlay.show { display: flex; }
+        .server-overlay-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.8rem;
+            padding: 1.6rem 1.9rem;
+            max-width: 32rem;
+            text-align: center;
+        }
+        .server-overlay-box h2 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .server-overlay-box p { color: var(--text-sub); font-size: 0.95rem; margin-bottom: 1.1rem; }
+        .server-overlay-box .btns { display: flex; gap: 0.6rem; justify-content: center; }
+
+        /* --- FILTERED BOX --- */
+        .noise-box { margin-top: 0.8rem; border: 1px dashed var(--border); border-radius: 0.6rem; background: var(--inset); }
+        .noise-box > summary {
+            list-style: none;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.55rem 0.8rem;
+            cursor: pointer;
+            color: var(--text-sub);
+            font-size: 0.9rem;
+        }
+        .noise-box > summary::-webkit-details-marker { display: none; }
+        .noise-box > summary .noise-title::before { content: '\25B8'; display: inline-block; margin-right: 0.45rem; transition: transform 0.15s ease; }
+        .noise-box[open] > summary .noise-title::before { transform: rotate(90deg); }
+        .noise-list { padding: 0 0.5rem 0.5rem; }
+
+        /* --- COMPACT ROWS --- */
+        .cu-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.3rem 0.8rem;
+            padding: 0.55rem 0.7rem;
+            border-radius: 0.45rem;
+            border: 1px solid transparent;
+            transition: opacity 0.25s ease, background 0.15s ease;
+        }
+        .cu-row:hover, .cu-row.open { background: var(--surface-2); border-color: var(--border); }
+        .cu-row.clearing { opacity: 0; }
+        .cu-row-main { cursor: pointer; min-width: 0; }
+        .cu-row-top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+        .cu-subj { font-weight: 600; font-size: 0.95rem; }
+        .cu-meta { font-size: 0.8rem; color: var(--text-faint); }
+        .cu-task { font-size: 0.9rem; color: var(--text-sub); margin-top: 0.1rem; }
+        .cu-row-btns { display: flex; gap: 0.4rem; align-items: flex-start; }
+        .cu-row-btns .btn-take-action { margin-top: 0; }
+        .cu-expand { grid-column: 1 / -1; margin-top: 0.3rem; }
+
+        /* --- CATCH-UP --- */
+        .cu-banner {
+            display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+            padding: 0.8rem 1.1rem;
+            border: 1px solid var(--accent);
+            background: var(--accent-soft);
+            border-radius: 0.7rem;
+            font-size: 0.98rem;
+        }
+        .cu-banner-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
+        .cu-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .cu-controls { display: flex; align-items: center; gap: 0.6rem; }
+        .cu-date { flex: none; width: 11rem; color-scheme: dark; }
+        .cu-progress { height: 6px; background: var(--inset); border-radius: 3px; margin-top: 0.6rem; overflow: hidden; }
+        .cu-bar { height: 100%; width: 4%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; }
+        .cu-overview {
+            margin-top: 1rem;
+            padding: 1rem 1.2rem;
+            background: var(--surface-2);
+            border-left: 3px solid var(--accent);
+            border-radius: 0.5rem;
+            font-family: var(--font-display);
+            font-size: 1.15rem;
+            line-height: 1.55;
+        }
+        .cu-stats { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-faint); }
+        .cu-section { margin-top: 1.6rem; }
+        .cu-h { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
+        .cu-count {
+            font-size: 0.75rem; font-weight: 600; color: var(--text-sub);
+            background: var(--surface-2); border: 1px solid var(--border);
+            border-radius: 999px; padding: 0.02rem 0.5rem; margin-left: 0.4rem;
+        }
+        .cu-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.1rem; }
+        .cu-group { margin-bottom: 1rem; padding-left: 0.8rem; border-left: 2px solid var(--border); }
+        .cu-group-name { font-weight: 600; font-size: 1rem; margin-bottom: 0.15rem; }
+        .cu-group-sum { font-size: 0.92rem; color: var(--text-sub); margin-bottom: 0.3rem; }
+        .dl-badge {
+            font-size: 0.75rem; font-weight: 600;
+            padding: 0.05rem 0.5rem; border-radius: 999px;
+            color: var(--info); background: var(--info-soft);
+        }
+        .dl-badge.missed { color: var(--accent-hover); background: var(--accent-soft); }
+        .cu-cal-day { margin-bottom: 0.7rem; }
+        .cu-cal-date { font-size: 0.85rem; font-weight: 600; color: var(--text-sub); margin-bottom: 0.2rem; }
+        .cu-cal-ev { font-size: 0.92rem; padding: 0.15rem 0; }
+        .cu-cal-time { display: inline-block; width: 5.5rem; color: var(--accent-hover); font-variant-numeric: tabular-nums; }
+
+        /* --- HEADER RIGHT GROUP: one row --- */
+        header { gap: 1rem; }
+        .header-right { display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; }
+
+        /* --- COMPACT LAYOUT (fixed ~960px DisplayFusion zone) --- */
+        @media (max-width: 1100px) {
+            body { padding: 1.1rem 1.1rem 1.5rem; gap: 1rem; }
+            h1 { font-size: 1.5rem; white-space: nowrap; }
+            .sub-header { font-size: 0.88rem; }
+            .status-badge { margin-right: 0.6rem; }
+            .last-updated { margin-right: 0.6rem; }
+            .card { padding: 1rem 1.1rem; }
+            .tl-inner { margin: 0 0.9rem; }
+            .tabs { gap: 1.3rem; margin-bottom: 1rem; }
+            .inbox-columns { gap: 0.9rem; }
+            .panel { padding: 0.85rem; }
+            .email-card { padding: 0.85rem 0.95rem; }
+            .cu-banner { padding: 0.7rem 0.9rem; }
+            .cu-cards { gap: 0 0.9rem; }
+            .agenda-time { width: 8.5rem; }
+        }
+
+        /* --- INBOX ASSISTANT --- */
+        .asst-fab {
+            position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 60;
+            width: 3.3rem; height: 3.3rem; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--accent); color: #1f1e1d; border: none; cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+            transition: transform 0.15s ease, background 0.15s ease;
+        }
+        .asst-fab:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .asst-fab.open { background: var(--surface-2); color: var(--text-main); border: 1px solid var(--border-strong); }
+        .asst-panel {
+            position: fixed; right: 1.2rem; bottom: 5.1rem; z-index: 60;
+            width: min(27rem, calc(100vw - 2.4rem)); height: min(36rem, calc(100vh - 7rem));
+            display: flex; flex-direction: column;
+            background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.8rem;
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+            overflow: hidden;
+        }
+        .asst-head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); }
+        .asst-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; }
+        .asst-head-btns { display: flex; gap: 0.35rem; }
+        .asst-icon-btn {
+            background: transparent; border: 1px solid var(--border); color: var(--text-sub);
+            border-radius: 0.35rem; padding: 0.15rem 0.55rem; font-size: 0.85rem; cursor: pointer;
+        }
+        .asst-icon-btn:hover { color: var(--text-main); border-color: var(--border-strong); }
+        .asst-log { flex: 1; overflow-y: auto; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; }
+        .asst-hint { color: var(--text-sub); font-size: 0.88rem; line-height: 1.5; }
+        .asst-hint em { color: var(--text-main); font-style: normal; }
+        .asst-msg { max-width: 92%; font-size: 0.92rem; line-height: 1.5; }
+        .asst-user { align-self: flex-end; background: var(--accent-soft); border: 1px solid rgba(217, 119, 87, 0.35); padding: 0.5rem 0.75rem; border-radius: 0.7rem 0.7rem 0.2rem 0.7rem; white-space: pre-wrap; }
+        .asst-bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); padding: 0.6rem 0.8rem; border-radius: 0.7rem 0.7rem 0.7rem 0.2rem; }
+        .asst-answer { white-space: pre-wrap; }
+        .asst-cite { font-size: 0.72rem; color: var(--info); vertical-align: super; margin-left: 1px; }
+        .asst-searched { margin-top: 0.45rem; font-size: 0.76rem; color: var(--text-faint); }
+        .asst-sources { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+        .asst-src {
+            display: flex; gap: 0.5rem; align-items: baseline; text-align: left;
+            background: var(--inset); border: 1px solid var(--border); border-radius: 0.4rem;
+            padding: 0.35rem 0.55rem; color: var(--text-main); cursor: pointer; font-size: 0.82rem;
+        }
+        .asst-src:hover { border-color: var(--info); }
+        .asst-src-wrap { display: flex; flex-direction: column; }
+        .asst-src-wrap .asst-src { width: 100%; }
+        .asst-chips { margin: 0.3rem 0 0.1rem 0.4rem; }
+        .asst-chips .chip { font-size: 0.78rem; padding: 0.2rem 0.55rem; }
+        .asst-chips .chip span { max-width: 15rem; }
+        .asst-src-n { color: var(--info); font-weight: 600; flex-shrink: 0; }
+        .asst-src-subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+        .asst-src-meta { color: var(--text-faint); font-size: 0.75rem; flex-shrink: 0; }
+        .asst-pending { color: var(--text-sub); font-size: 0.88rem; }
+        .asst-pending::after { content: ''; display: inline-block; width: 1em; animation: asstDots 1.2s steps(4) infinite; overflow: hidden; vertical-align: bottom; }
+        @keyframes asstDots { 0% { width: 0; } 100% { width: 1.1em; } }
+        .asst-input-row { display: flex; gap: 0.5rem; align-items: flex-end; padding: 0.7rem; border-top: 1px solid var(--border); }
+        .asst-input-row textarea { resize: none; max-height: 8rem; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>Daily Briefing & Executive Timeline</h1>
+            <div class="sub-header" id="headerDate">Loading date...</div>
+        </div>
+        <div class="header-right">
+            <span class="last-updated" id="lastUpdated"></span>
+            <span class="status-badge"><span class="status-dot"></span>Connected to Desktop Outlook</span>
+            <button class="btn-refresh" onclick="fetchData()">Refresh Data</button>
+        </div>
+    </header>
+
+    <div class="cu-banner" id="catchupBanner" style="display:none;">
+        <span id="cuBannerText"></span>
+        <div class="cu-banner-btns">
+            <button class="btn-action" onclick="startCatchupFromBanner()">Catch me up</button>
+            <button class="btn-refresh" onclick="dismissBanner()">Dismiss</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="tl-head">
+            <div class="card-title">Today's Timeline</div>
+            <div class="tl-allday" id="allDayContainer"></div>
+            <div class="tl-status" id="tlStatus"></div>
+        </div>
+        <div class="tl-inner" id="timelineBox">
+            <div class="tl-labels" id="tlLabels"></div>
+            <div class="tl-lanes" id="tlLanes"></div>
+            <div class="tl-axis-zone" id="tlAxisZone">
+                <div class="tl-axis"></div>
+            </div>
+            <div class="now-line" id="nowLine"></div>
+        </div>
+    </div>
+
+    <div>
+        <div class="tabs">
+            <div class="tab active" data-tab="inbox" onclick="switchTab('inbox')">Inbox</div>
+            <div class="tab" data-tab="notes" onclick="switchTab('notes')">Running Notes</div>
+            <div class="tab" data-tab="tomorrow" onclick="switchTab('tomorrow')">Tomorrow's Agenda</div>
+            <div class="tab" data-tab="catchup" onclick="switchTab('catchup')">Catch-up</div>
+        </div>
+
+        <!-- TAB 1: INBOX -->
+        <div id="tab-inbox" class="inbox-columns">
+            <div class="panel panel-req">
+                <div class="panel-header">⚡ Requires Response</div>
+                <div id="reqContainer">Loading emails...</div>
+            </div>
+            <div class="panel panel-fyi">
+                <div class="panel-header">FYI / Reading</div>
+                <div id="fyiContainer">Loading emails...</div>
+                <div id="noiseContainer"></div>
+            </div>
+        </div>
+
+        <!-- TAB 2: RUNNING NOTES -->
+        <div id="tab-notes" class="card" style="display: none;">
+            <div class="card-title">Running Notes & Tasks</div>
+            <div class="todo-toolbar">
+                <input type="text" id="newTodo" class="input-prompt" placeholder="Add a task and press Enter..." onkeydown="if (event.key === 'Enter') addTodo()">
+                <button class="btn-action" onclick="addTodo()">Add</button>
+                <button class="btn-refresh" onclick="clearCompleted()">Clear completed</button>
+            </div>
+            <div id="todoList" class="muted">Loading tasks...</div>
+        </div>
+
+        <!-- TAB 4: CATCH-UP -->
+        <div id="tab-catchup" class="card" style="display: none;">
+            <div class="cu-head">
+                <div class="card-title" style="margin-bottom:0;">Catch-up</div>
+                <div class="cu-controls">
+                    <label class="muted" for="cuSince">Everything since</label>
+                    <input type="date" id="cuSince" class="input-prompt cu-date">
+                    <button class="btn-action" id="cuRun" onclick="startCatchup()">Run catch-up</button>
+                </div>
+            </div>
+            <div id="cuStatus" class="muted" style="margin-top:0.6rem;"></div>
+            <div class="cu-progress" id="cuProgress" style="display:none;"><div class="cu-bar" id="cuBar"></div></div>
+            <div id="cuResult"></div>
+        </div>
+
+        <!-- TAB 3: TOMORROW'S AGENDA -->
+        <div id="tab-tomorrow" class="card" style="display: none;">
+            <div class="card-title" id="tomorrowTitle">Tomorrow's Calendar Overview</div>
+            <div id="tomorrowContainer">Loading tomorrow's schedule...</div>
+        </div>
+    </div>
+
+    <!-- INBOX ASSISTANT -->
+    <button class="asst-fab" id="asstFab" onclick="toggleAssistant()" title="Ask your inbox (Ctrl+K)">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5.1A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg>
+    </button>
+    <div class="asst-panel" id="asstPanel" style="display:none;">
+        <div class="asst-head">
+            <span class="asst-title">Ask your inbox</span>
+            <span class="asst-head-btns">
+                <button class="asst-icon-btn" onclick="clearAssistant()" title="New conversation">New</button>
+                <button class="asst-icon-btn" onclick="toggleAssistant()" title="Close (Esc)">&times;</button>
+            </span>
+        </div>
+        <div class="asst-log" id="asstLog">
+            <div class="asst-hint">Searches your Inbox, its subfolders, and Sent Items (not Deleted or Archived). Name a person, a topic, or a time frame. It can also open a new email draft for you (never sends).<br><br>Try: <em>What did Alex and I decide about the budget?</em>, <em>What did Jordan announce last week?</em>, or <em>Email Sam asking for the report by Friday</em></div>
+        </div>
+        <div class="asst-input-row">
+            <textarea id="asstInput" class="input-prompt" rows="1" placeholder="Ask about your email, or ask for a new draft...  (Enter)" oninput="autoGrow(this)" onkeydown="asstKeys(event)"></textarea>
+            <button class="btn-action" id="asstSend" onclick="askAssistant()">Ask</button>
+        </div>
+    </div>
+
+    <div class="server-overlay" id="serverOverlay">
+        <div class="server-overlay-box">
+            <h2>Server stopped</h2>
+            <p>The Daily Briefing server is not responding. Start it again with launch_dashboard.vbs, or use Restart Server from the tray icon.</p>
+            <div class="btns">
+                <button class="btn-refresh" onclick="heartbeat()">Retry</button>
+                <button class="btn-action" onclick="window.close()">Close window</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const START_HOUR = 8;
+        const END_HOUR = 18;
+        const TOTAL_HOURS = END_HOUR - START_HOUR;
+
+        document.getElementById('headerDate').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+
+        let tlMeetings = [];
+        const fmtDur = ms => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60 ? (m % 60) + 'm' : ''}`.trim(); };
+
+        // Past meetings fade, the current one glows, and the header says what's on now or next
+        function updateMeetingStates() {
+            const now = Date.now();
+            document.querySelectorAll('#timelineBox [data-end]').forEach(el => {
+                const s = +el.dataset.start, e = +el.dataset.end;
+                el.classList.toggle('past', e <= now);
+                el.classList.toggle('current', s <= now && now < e);
+            });
+            const status = document.getElementById('tlStatus');
+            if (!tlMeetings.length) { status.innerHTML = ''; return; }
+            const current = tlMeetings.filter(m => m.start <= now && now < m.end);
+            if (current.length) {
+                const soonest = Math.min(...current.map(m => m.end));
+                status.innerHTML = `Now: <b>${current.map(m => esc(m.subject)).join(', ')}</b> · ${fmtDur(soonest - now)} left`;
+                status.title = status.innerText;
+                return;
+            }
+            const next = tlMeetings.filter(m => m.start > now).sort((a, b) => a.start - b.start)[0];
+            status.innerHTML = next
+                ? `Next: <b>${esc(next.subject)}</b> at ${fmtTime(new Date(next.start))} · in ${fmtDur(next.start - now)}`
+                : 'No more meetings today';
+            status.title = status.innerText;
+        }
+
+        function updateNowLine() {
+            updateMeetingStates();
+            const now = new Date();
+            const currentHour = now.getHours() + (now.getMinutes() / 60);
+            const line = document.getElementById('nowLine');
+            
+            if (currentHour >= START_HOUR && currentHour <= END_HOUR) {
+                const pct = ((currentHour - START_HOUR) / TOTAL_HOURS) * 100;
+                line.style.left = pct + '%';
+                line.style.display = 'block';
+            } else {
+                line.style.display = 'none';
+            }
+        }
+
+        async function fetchData() {
+            // Live elapsed counter so a slow refresh never looks frozen
+            const t0 = Date.now();
+            const tick = () => {
+                const s = Math.round((Date.now() - t0) / 1000);
+                const msg = s < 5 ? 'Reading Outlook...' : `Summarizing emails with Claude... ${s}s`;
+                document.getElementById('lastUpdated').innerText = msg;
+                ['reqContainer', 'fyiContainer'].forEach(id => {
+                    const c = document.getElementById(id);
+                    if (c.dataset.loading === '1' || /^Loading emails/.test(c.innerText)) { c.dataset.loading = '1'; c.innerHTML = `<div class="muted">${msg}</div>`; }
+                });
+            };
+            tick();
+            const ticker = setInterval(tick, 1000);
+            try {
+                const res = await fetch('http://localhost:8000/api/data');
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.message || 'Outlook is not ready yet');
+                clearInterval(ticker);
+                ['reqContainer', 'fyiContainer'].forEach(id => delete document.getElementById(id).dataset.loading);
+                renderTimeline(data.calendar || []);
+                renderEmails(data.emails);
+                renderTomorrow(data.tomorrow || [], data.tomorrowDate);
+                updateCatchupBanner(data.catchup);
+                document.getElementById('lastUpdated').innerText = 'Updated ' + fmtTime(new Date());
+            } catch (err) {
+                clearInterval(ticker);
+                document.getElementById('lastUpdated').innerText = /Outlook/.test(err.message) ? 'Outlook not ready, click Refresh Data' : 'Refresh failed';
+                console.error("Fetch error:", err);
+                document.getElementById('tomorrowContainer').innerHTML = '<div class="muted">Could not reach the local server.</div>';
+            }
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function fmtTime(d) {
+            return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        }
+
+        function renderTomorrow(events, dateStr) {
+            const c = document.getElementById('tomorrowContainer');
+            if (dateStr) {
+                const d = new Date(dateStr + 'T00:00:00');
+                document.getElementById('tomorrowTitle').innerText =
+                    'Agenda for ' + d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+            }
+            if (!events.length) {
+                c.innerHTML = '<div class="muted">No events scheduled.</div>';
+                return;
+            }
+            c.innerHTML = events.map(ev => {
+                const s = new Date(ev.Start), e = new Date(ev.End);
+                const time = ev.AllDay ? 'All day' : `${fmtTime(s)} - ${fmtTime(e)}`;
+                const loc = ev.Location ? `<div class="agenda-loc">${esc(ev.Location)}</div>` : '';
+                return `<div class="agenda-row"><div class="agenda-time">${time}</div><div><div class="agenda-subject">${esc(ev.Subject)}</div>${loc}</div></div>`;
+            }).join('');
+        }
+
+        // --- TIMELINE: flat axis, segments on the line, width-matched labels above ---
+        const LABEL_GAP = 6;   // px between stacked label lanes and above the axis
+        const LANE_H = 16;     // px per extra Gantt row for overlapping meetings
+        const hourOf = d => d.getHours() + d.getMinutes() / 60;
+        const hourLabel = h => (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? ' AM' : ' PM');
+
+        function buildAxis() {
+            const zone = document.getElementById('tlAxisZone');
+            zone.querySelectorAll('.tl-tick, .tl-tick-label').forEach(n => n.remove());
+            for (let h = START_HOUR; h <= END_HOUR; h++) {
+                const pct = ((h - START_HOUR) / TOTAL_HOURS) * 100;
+                const tick = document.createElement('div');
+                tick.className = 'tl-tick';
+                tick.style.left = pct + '%';
+                const lbl = document.createElement('div');
+                lbl.className = 'tl-tick-label';
+                lbl.style.left = pct + '%';
+                lbl.innerText = hourLabel(h);
+                zone.appendChild(tick);
+                zone.appendChild(lbl);
+            }
+        }
+
+        function renderTimeline(events) {
+            const labels = document.getElementById('tlLabels');
+            const zone = document.getElementById('tlAxisZone');
+            const allDay = document.getElementById('allDayContainer');
+            labels.innerHTML = '';
+            zone.querySelectorAll('.tl-seg').forEach(n => n.remove());
+            allDay.innerHTML = '';
+
+            const timed = [];
+            events.forEach(ev => {
+                if (ev.AllDay) {
+                    allDay.insertAdjacentHTML('beforeend', `<span class="tl-chip">All day: ${esc(ev.Subject)}</span>`);
+                    return;
+                }
+                const start = new Date(ev.Start), end = new Date(ev.End);
+                const s = Math.max(hourOf(start), START_HOUR);
+                const e = Math.min(hourOf(end), END_HOUR);
+                if (e > START_HOUR && s < END_HOUR && e > s) timed.push({ ev, start, end, s, e });
+            });
+
+            // Meetings under 30 minutes get no label; hover the segment for the title
+            const MIN_LABEL_MINUTES = 30;
+            timed.forEach(t => { t.showLabel = (t.end - t.start) / 60000 >= MIN_LABEL_MINUTES; });
+
+            timed.sort((a, b) => a.s - b.s);
+
+            // Gantt rows: a meeting that overlaps an earlier one moves up a row (row 0 = on the axis)
+            const rowEnd = [];
+            timed.forEach(t => {
+                let r = rowEnd.findIndex(end => end <= t.s + 1e-9);
+                if (r === -1) { r = rowEnd.length; rowEnd.push(0); }
+                rowEnd[r] = t.e;
+                t.row = r;
+            });
+            const lanesBox = document.getElementById('tlLanes');
+            lanesBox.innerHTML = '';
+            lanesBox.style.height = (Math.max(0, rowEnd.length - 1) * LANE_H) + 'px';
+
+            timed.forEach(t => {
+                const left = ((t.s - START_HOUR) / TOTAL_HOURS) * 100;
+                const width = ((t.e - t.s) / TOTAL_HOURS) * 100;
+                const tip = `${t.ev.Subject}\n${fmtTime(t.start)} - ${fmtTime(t.end)}`;
+
+                const seg = document.createElement('div');
+                seg.className = 'tl-seg';
+                seg.dataset.start = t.start.getTime();
+                seg.dataset.end = t.end.getTime();
+                seg.style.left = left + '%';
+                seg.style.width = width + '%';
+                seg.title = tip;
+                if (t.row === 0) {
+                    zone.appendChild(seg);
+                } else {
+                    seg.style.bottom = ((t.row - 1) * LANE_H + 2) + 'px';
+                    lanesBox.appendChild(seg);
+                }
+                if (!t.showLabel) return;
+
+                const lbl = document.createElement('div');
+                lbl.className = 'tl-label';
+                lbl.dataset.segLeft = left;     // % of axis width
+                lbl.dataset.segWidth = width;   // % of axis width
+                lbl.dataset.row = t.row;        // Gantt row of its segment
+                lbl.dataset.start = t.start.getTime();
+                lbl.dataset.end = t.end.getTime();
+                lbl.title = tip;
+                lbl.innerText = t.ev.Subject;
+                labels.appendChild(lbl);
+            });
+
+            tlMeetings = timed.map(t => ({ subject: t.ev.Subject, start: t.start.getTime(), end: t.end.getTime() }));
+            layoutLabels();
+            updateNowLine();
+        }
+
+        // Label layout: each label is as wide as its title needs (between the segment width and a cap),
+        // labels that would overlap on screen stack into rows, and a leader line ties each one to its segment.
+        function layoutLabels() {
+            const labels = document.getElementById('tlLabels');
+            labels.querySelectorAll('.tl-leader').forEach(n => n.remove());
+            const items = [...labels.querySelectorAll('.tl-label')];
+            if (!items.length) { labels.style.height = '0.5rem'; return; }
+
+            const W = labels.clientWidth;
+            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+            const maxW = Math.min(13 * rem, W);
+            const H_GAP = 6;
+
+            // 1. Width and horizontal position
+            const boxes = items.map(l => {
+                const segL = +l.dataset.segLeft / 100 * W;
+                const segW = +l.dataset.segWidth / 100 * W;
+                l.classList.add('measuring');
+                const natural = Math.ceil(l.getBoundingClientRect().width) + 4;   // fractional width incl. border, plus a margin
+                l.classList.remove('measuring');
+                const w = Math.min(Math.max(segW, natural), maxW);
+                let x = segL;
+                if (x + w > W) x = Math.max(0, W - w);   // keep inside the card at the right edge
+                l.style.left = x + 'px';
+                l.style.width = w + 'px';
+                return { l, x, w, anchor: segL + Math.min(segW / 2, 10) };
+            });
+
+            // 2. Rows: first row where the label fits without touching its neighbor
+            boxes.sort((a, b) => a.x - b.x);
+            const rowEnds = [];
+            boxes.forEach(b => {
+                let row = rowEnds.findIndex(end => end + H_GAP <= b.x);
+                if (row === -1) { row = rowEnds.length; rowEnds.push(0); }
+                rowEnds[row] = b.x + b.w;
+                b.row = row;
+            });
+
+            // 3. Vertical stacking by measured heights
+            const rowH = [];
+            boxes.forEach(b => { rowH[b.row] = Math.max(rowH[b.row] || 0, b.l.offsetHeight); });
+            const bottoms = [];
+            let acc = LABEL_GAP + 4;
+            rowH.forEach((hgt, i) => { bottoms[i] = acc; acc += (hgt || 0) + LABEL_GAP; });
+            boxes.forEach(b => { b.l.style.bottom = bottoms[b.row] + 'px'; });
+            labels.style.height = acc + 'px';
+
+            // 4. Leader lines from each label down to the top of its segment (on the axis or in its Gantt row)
+            const lanesH = document.getElementById('tlLanes').offsetHeight;
+            boxes.forEach(b => {
+                const segRow = +b.l.dataset.row || 0;
+                const drop = segRow === 0 ? lanesH + 0.75 * rem - 5 : lanesH - ((segRow - 1) * LANE_H + 14);
+                const ln = document.createElement('div');
+                ln.className = 'tl-leader';
+                ln.dataset.start = b.l.dataset.start;
+                ln.dataset.end = b.l.dataset.end;
+                ln.style.left = Math.round(b.anchor) + 'px';
+                ln.style.bottom = (-drop) + 'px';
+                ln.style.height = (bottoms[b.row] + drop) + 'px';
+                labels.appendChild(ln);
+            });
+            updateMeetingStates();
+        }
+
+        window.addEventListener('resize', layoutLabels);
+        buildAxis();
+
+        function renderEmails(payload) {
+            const reqCont = document.getElementById('reqContainer');
+            const fyiCont = document.getElementById('fyiContainer');
+            reqCont.innerHTML = ''; fyiCont.innerHTML = '';
+
+            // AI formatting safety net
+            let emails = [];
+            if (Array.isArray(payload)) {
+                emails = payload;
+            } else if (payload && Array.isArray(payload.emails)) {
+                emails = payload.emails;
+            } else if (payload && typeof payload === 'object') {
+                // Find any internal array if nested deeply
+                emails = Object.values(payload).find(val => Array.isArray(val)) || [payload];
+            }
+
+            if (!emails || emails.length === 0) {
+                reqCont.innerHTML = '<div class="muted">No unread response items.</div>';
+                fyiCont.innerHTML = '<div class="muted">No unread FYI items.</div>';
+                document.getElementById('noiseContainer').innerHTML = '';
+                return;
+            }
+
+            emails = emails.filter(i => !wasCleared(i));
+            const noise = emails.filter(i => i.Category === 'Noise');
+            const shown = emails.filter(i => i.Category !== 'Noise' && (i.Subject || i.CleanSubject));
+            shown.forEach(item => {
+                const card = buildCard(item);
+                const isReq = item.Category === 'Requires Response';
+                if (isReq) reqCont.appendChild(card);
+                else fyiCont.appendChild(card);
+            });
+            if (!reqCont.children.length) reqCont.innerHTML = '<div class="muted">No unread response items.</div>';
+            if (!fyiCont.children.length) fyiCont.innerHTML = '<div class="muted">No unread FYI items.</div>';
+            renderNoiseBox(document.getElementById('noiseContainer'), noise);
+        }
+
+        // Compact one-line row; click it to expand the full card
+        function compactRow(item, note) {
+            const row = document.createElement('div');
+            row.className = 'cu-row';
+            row.dataset.ids = JSON.stringify((item.Ids || []).filter(Boolean));
+            const n = (item.Messages || []).length;
+            const meta = [item.From, fmtReceived(item.LatestReceived), n > 1 ? n + ' messages' : ''].filter(Boolean).join('  ·  ');
+            row.innerHTML = `
+                <div class="cu-row-main" onclick="toggleRow(this)">
+                    <div class="cu-row-top"><span class="cu-subj">${esc(item.CleanSubject || item.Subject || 'Email')}</span><span class="cu-meta">${esc(meta)}</span></div>
+                    <div class="cu-task">${esc(note != null ? note : (item.ActionTask || ''))}</div>
+                </div>
+                <div class="cu-row-btns">
+                    <button class="btn-take-action" onclick="handleOpen('${esc((item.Ids || [])[0] || '')}', this)">Open</button>
+                    <button class="btn-take-action btn-clear" onclick="clearRow(this)">Clear</button>
+                </div>
+                <div class="cu-expand" style="display:none;"></div>`;
+            row._item = item;
+            return row;
+        }
+
+        function toggleRow(el) {
+            const row = el.closest('.cu-row');
+            const box = row.querySelector('.cu-expand');
+            if (!box.children.length) box.appendChild(buildCard(row._item));
+            box.style.display = box.style.display === 'none' ? 'block' : 'none';
+            row.classList.toggle('open', box.style.display === 'block');
+        }
+
+        // Message IDs you cleared. A refresh that was already running when you clicked Clear
+        // (or a slow Outlook sync) can never bring those cards back.
+        const CLEARED_KEY = 'clearedIds';
+        function loadCleared() {
+            try {
+                const o = JSON.parse(lsGet(CLEARED_KEY) || '{}');
+                const cutoff = Date.now() - 2 * 86400000;
+                Object.keys(o).forEach(k => { if (o[k] < cutoff) delete o[k]; });
+                return o;
+            } catch (e) { return {}; }
+        }
+        let clearedIds = loadCleared();
+        function rememberCleared(ids) {
+            const now = Date.now();
+            (ids || []).forEach(id => { if (id) clearedIds[id] = now; });
+            lsSet(CLEARED_KEY, JSON.stringify(clearedIds));
+        }
+        const wasCleared = item => (item.Ids || []).some(id => clearedIds[id]);
+
+        async function markRead(ids) {
+            if (!ids.length) return true;
+            const r = await postJson('/api/markread', { Ids: ids });
+            if (r.status === 'success') rememberCleared(ids);
+            return r.status === 'success';
+        }
+
+        async function clearRow(btn) {
+            const row = btn.closest('.cu-row');
+            btn.innerText = 'Clearing...';
+            if (!(await markRead(JSON.parse(row.dataset.ids || '[]')))) { btn.innerText = 'Error'; return; }
+            const box = row.closest('.noise-box');
+            row.classList.add('clearing');
+            setTimeout(() => { row.remove(); forgetCleared(row.dataset.ids); if (box) updateNoiseCount(box); }, 260);
+        }
+
+        // "Filtered out" box: Other tab, newsletters, insurance/IRA notices, society mailings
+        function renderNoiseBox(container, items) {
+            container.innerHTML = '';
+            if (!items.length) return;
+            const box = document.createElement('details');
+            box.className = 'noise-box';
+            box.innerHTML = `<summary><span class="noise-title">Filtered out <span class="noise-count"></span></span>
+                <button class="btn-take-action" onclick="event.preventDefault(); clearAllNoise(this)">Mark all read</button></summary><div class="noise-list"></div>`;
+            const list = box.querySelector('.noise-list');
+            items.forEach(it => list.appendChild(compactRow(it, it.NoiseReason ? `${it.NoiseReason}: ${it.ActionTask || ''}` : it.ActionTask)));
+            container.appendChild(box);
+            updateNoiseCount(box);
+        }
+
+        function updateNoiseCount(box) {
+            const n = box.querySelectorAll('.cu-row').length;
+            box.querySelector('.noise-count').innerText = `(${n})`;
+            if (!n) box.remove();
+        }
+
+        async function clearAllNoise(btn) {
+            const box = btn.closest('.noise-box');
+            const ids = [...box.querySelectorAll('.cu-row')].flatMap(r => JSON.parse(r.dataset.ids || '[]'));
+            btn.innerText = 'Clearing...';
+            if (!(await markRead(ids))) { btn.innerText = 'Error'; return; }
+            box.querySelectorAll('.cu-row').forEach(r => forgetCleared(r.dataset.ids));
+            box.remove();
+        }
+
+        // ---------------- CATCH-UP ----------------
+        let cuPoll = null;
+        let cuLoaded = false;
+        let cuGenerated = null;
+
+        // After a Clear: drop every copy of that conversation from the rundown, and remember it
+        function forgetCleared(idsJson) {
+            document.querySelectorAll('#cuResult [data-ids]').forEach(el => {
+                if (el.dataset.ids === idsJson) (el.closest('.cu-row') || el).remove();
+            });
+            if (cuGenerated) {
+                const key = 'cuCleared:' + cuGenerated;
+                const list = JSON.parse(lsGet(key) || '[]');
+                if (!list.includes(idsJson)) { list.push(idsJson); lsSet(key, JSON.stringify(list)); }
+            }
+        }
+
+        function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+        function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+        function updateCatchupBanner(info) {
+            const banner = document.getElementById('catchupBanner');
+            const since = document.getElementById('cuSince');
+            if (info && info.PrevSeen && !since.value) since.value = info.PrevSeen.slice(0, 10);
+            if (!since.value) { const d = new Date(); d.setDate(d.getDate() - 7); since.value = d.toISOString().slice(0, 10); }
+            if (!info || !info.Suggest || lsGet('cuDismissed') === info.PrevSeen) { banner.style.display = 'none'; return; }
+            const d = new Date(info.PrevSeen);
+            document.getElementById('cuBannerText').innerText =
+                `You've been away since ${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} (${info.AwayWeekdays} workdays). Want a full rundown of what you missed?`;
+            banner.dataset.prev = info.PrevSeen;
+            banner.style.display = 'flex';
+        }
+
+        function dismissBanner() {
+            const b = document.getElementById('catchupBanner');
+            lsSet('cuDismissed', b.dataset.prev || '');
+            b.style.display = 'none';
+        }
+
+        function startCatchupFromBanner() {
+            dismissBanner();
+            switchTab('catchup');
+            startCatchup();
+        }
+
+        async function startCatchup() {
+            const since = document.getElementById('cuSince').value;
+            if (!since) return;
+            const r = await postJson('/api/catchup/start', { Since: since });
+            if (r.status === 'started' || r.status === 'running') pollCatchup();
+            else setCuStatus('Could not start the catch-up: ' + (r.message || 'server error'));
+        }
+
+        function setCuStatus(text) { document.getElementById('cuStatus').innerText = text; }
+
+        async function pollCatchup() {
+            clearTimeout(cuPoll);
+            let s;
+            try { s = await (await fetch('http://localhost:8000/api/catchup/status', { cache: 'no-store' })).json(); }
+            catch (e) { cuPoll = setTimeout(pollCatchup, 5000); return; }
+            const bar = document.getElementById('cuProgress');
+            const run = document.getElementById('cuRun');
+            if (s.Status === 'running') {
+                run.disabled = true;
+                bar.style.display = 'block';
+                document.getElementById('cuBar').style.width = (s.Total ? Math.max(4, 100 * s.Done / s.Total) : 4) + '%';
+                setCuStatus(`${s.Stage}...  This runs in the background, so you can keep using the other tabs.`);
+                cuPoll = setTimeout(pollCatchup, 3000);
+            } else {
+                run.disabled = false;
+                bar.style.display = 'none';
+                if (s.Status === 'error') setCuStatus('Catch-up failed: ' + s.Error);
+                if (s.Status === 'done') { cuLoaded = false; loadCatchupResult(); }
+            }
+        }
+
+        async function loadCatchupResult() {
+            if (cuLoaded) return;
+            let r = null;
+            try { r = await (await fetch('http://localhost:8000/api/catchup/result', { cache: 'no-store' })).json(); } catch (e) {}
+            if (!r) { if (!document.getElementById('cuStatus').innerText) setCuStatus('No catch-up yet. Pick a start date and run one.'); return; }
+            cuLoaded = true;
+            renderCatchup(r);
+        }
+
+        function cuSection(title, count, extraClass) {
+            const sec = document.createElement('section');
+            sec.className = 'cu-section ' + (extraClass || '');
+            sec.innerHTML = `<h3 class="cu-h">${esc(title)}${count != null ? `<span class="cu-count">${count}</span>` : ''}</h3>`;
+            return sec;
+        }
+
+        function renderCatchup(r) {
+            const out = document.getElementById('cuResult');
+            out.innerHTML = '';
+            cuGenerated = r.GeneratedAt;
+            const cleared = new Set(JSON.parse(lsGet('cuCleared:' + r.GeneratedAt) || '[]'));
+            const byKey = {};
+            (r.Items || []).forEach(i => { if (!cleared.has(JSON.stringify((i.Ids || []).filter(Boolean)))) byKey[i.Key] = i; });
+            const get = keys => (keys || []).map(k => byKey[k]).filter(Boolean);
+            const gen = new Date(r.GeneratedAt);
+            const since = new Date(r.Since + 'T00:00:00');
+            setCuStatus(`Covers everything since ${since.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}. Generated ${gen.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${fmtTime(gen)}.`);
+
+            if (r.Overview) {
+                const ov = document.createElement('div');
+                ov.className = 'cu-overview';
+                ov.innerText = r.Overview;
+                out.appendChild(ov);
+            }
+            const c = r.Counts || {};
+            const counts = document.createElement('div');
+            counts.className = 'cu-stats';
+            counts.innerText = `${c.Scanned || 0} emails scanned  ·  ${c.Conversations || 0} conversations  ·  ${c.AlreadyAnswered || 0} you already answered were skipped`;
+            out.appendChild(counts);
+
+            // Needs you now: full cards
+            const needs = get(r.NeedsYou);
+            const needSet = new Set(needs.map(i => i.Key));
+            const s1 = cuSection('Needs you now', needs.length, 'cu-needs');
+            const grid = document.createElement('div');
+            grid.className = 'cu-cards';
+            grid.dataset.empty = 'All caught up.';
+            needs.forEach(i => grid.appendChild(buildCard(i)));
+            if (!needs.length) grid.innerHTML = '<div class="muted">Nothing is waiting on you.</div>';
+            s1.appendChild(grid);
+            out.appendChild(s1);
+
+            // Deadlines
+            const dls = (r.Deadlines || []).filter(d => byKey[d.Key]);
+            if (dls.length) {
+                const s = cuSection('Deadlines', dls.length);
+                dls.forEach(d => {
+                    const i = byKey[d.Key];
+                    const dd = new Date(d.Date + 'T00:00:00');
+                    const row = compactRow(i, d.Note || i.ActionTask);
+                    row.querySelector('.cu-row-top').insertAdjacentHTML('afterbegin',
+                        `<span class="dl-badge ${d.Missed ? 'missed' : ''}">${d.Missed ? 'Missed ' : 'Due '}${dd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`);
+                    s.appendChild(row);
+                });
+                out.appendChild(s);
+            }
+
+            // By project
+            const projects = (r.Projects || []).filter(pg => get(pg.Keys).length);
+            if (projects.length) {
+                const s = cuSection('By project', null);
+                projects.forEach(pg => {
+                    const g = document.createElement('div');
+                    g.className = 'cu-group';
+                    g.innerHTML = `<div class="cu-group-name">${esc(pg.Name)}<span class="cu-count">${get(pg.Keys).length}</span></div>${pg.Summary ? `<div class="cu-group-sum">${esc(pg.Summary)}</div>` : ''}`;
+                    get(pg.Keys).forEach(i => {
+                        const row = compactRow(i);
+                        const tag = needSet.has(i.Key) ? '<span class="dl-badge missed">Needs you</span>' : (i.Resolved ? '<span class="dl-badge">Resolved</span>' : '');
+                        if (tag) row.querySelector('.cu-row-top').insertAdjacentHTML('beforeend', tag);
+                        g.appendChild(row);
+                    });
+                    s.appendChild(g);
+                });
+                out.appendChild(s);
+            }
+
+            const simple = (title, keys) => {
+                const items = get(keys);
+                if (!items.length) return;
+                const s = cuSection(title, items.length);
+                items.forEach(i => s.appendChild(compactRow(i)));
+                out.appendChild(s);
+            };
+            simple('Resolved without you', r.Resolved);
+
+            const noise = get(r.Noise);
+            if (noise.length) {
+                const s = cuSection('Filtered', null);
+                const holder = document.createElement('div');
+                s.appendChild(holder);
+                renderNoiseBox(holder, noise);
+                out.appendChild(s);
+            }
+
+            // Calendar
+            const cal = r.Calendar || {};
+            const calDays = (title, days) => {
+                days = days || [];
+                if (!days.length) return;
+                const s = cuSection(title, null);
+                days.forEach(day => {
+                    const d = new Date(day.Date + 'T00:00:00');
+                    const g = document.createElement('div');
+                    g.className = 'cu-cal-day';
+                    g.innerHTML = `<div class="cu-cal-date">${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>` +
+                        (day.Events || []).map(ev => `<div class="cu-cal-ev"><span class="cu-cal-time">${ev.AllDay ? 'All day' : fmtTime(new Date(ev.Start))}</span>${esc(ev.Subject)}</div>`).join('');
+                    s.appendChild(g);
+                });
+                out.appendChild(s);
+            };
+            calDays('Meetings while you were away', cal.Missed);
+            calDays('Coming week', cal.Upcoming);
+        }
+
+        // One email card (used by the Inbox tab and the Catch-up tab)
+        function buildCard(item) {
+            const card = document.createElement('div');
+            card.className = 'email-card';
+            card.dataset.ids = JSON.stringify((item.Ids || []).filter(Boolean));
+            
+            const isReq = item.Category === 'Requires Response';
+            const newestId = esc((item.Ids || [])[0] || '');
+            const msgs = item.Messages || [];
+
+            // Single email: context bullets. Thread with several unread: one line per message, oldest first.
+            let body;
+            if (msgs.length > 1) {
+                body = '<ol class="thread-list">' + msgs.map(m => `
+                    <li><span class="thread-from">${esc(m.From)}</span><span class="thread-time">${esc(fmtReceived(m.Received))}</span>
+                    <div class="thread-sum">${esc(m.Summary)}</div></li>`).join('') + '</ol>';
+            } else {
+                body = '<ul class="play-list">' + (item.PlayByPlay || []).map(b => `<li>${esc(b)}</li>`).join('') + '</ul>';
+            }
+
+            const links = (item.Links || []).map(l =>
+                `<a class="chip chip-link" href="${esc(l.Url)}" target="_blank" rel="noopener" title="${esc(l.Url)}">${ICON_LINK}<span>${esc(l.Title || l.Url)}</span></a>`).join('');
+            const atts = (item.Attachments || []).map(a =>
+                `<button class="chip chip-att" data-id="${esc(a.Id)}" data-index="${a.Index}" onclick="handleAttachment(this)" title="Open ${esc(a.Name)}">${ICON_CLIP}<span>${esc(a.Name)}</span><span class="chip-size">${a.SizeKB} KB</span></button>`).join('');
+            const resources = (links || atts) ? `<div class="chip-row">${links}${atts}</div>` : '';
+            const badge = msgs.length > 1 ? `<span class="unread-badge">${msgs.length} unread</span>` : '';
+
+            card.innerHTML = `
+                <div class="email-subject">${esc(item.CleanSubject || item.Subject || 'Email Thread')}${badge}</div>
+                <div class="email-task">${esc(item.ActionTask || 'Review thread')}</div>
+                ${body}
+                ${resources}
+                <div class="card-actions">
+                    <button class="btn-take-action" onclick="toggleAction(this)">Take action</button>
+                    <button class="btn-take-action" onclick="handleOpen('${newestId}', this)" title="Open the newest message in Outlook">Open in Outlook</button>
+                    <button class="btn-take-action btn-clear" onclick="handleClear(this)" title="Mark as read in Outlook and remove from the dashboard">Clear</button>
+                </div>
+                <div class="action-panel" style="display:none;">
+                    <div class="control-row">
+                        <textarea class="input-prompt" rows="1" placeholder="Enter: Ask AI  |  Ctrl+Enter: Draft  |  Shift+Enter: new line" oninput="autoGrow(this)" onkeydown="promptKeys(event, this)"></textarea>
+                        <button class="btn-action btn-ask" onclick="handleAsk('${newestId}', this)">Ask AI</button>
+                        <button class="btn-action btn-draft" onclick="handleDraft('${newestId}', this)">Draft</button>
+                    </div>
+                    <div class="ai-answer" style="display:none;"></div>
+                </div>
+            `;
+            return card;
+        }
+
+
+        const ICON_LINK = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h4v4"/><path d="M13 3L7 9"/><path d="M11 9.5V13H3V5h3.5"/></svg>';
+        const ICON_CLIP = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 7.5l-5.6 5.6a3.2 3.2 0 01-4.5-4.5l5.9-5.9a2.1 2.1 0 013 3l-5.9 5.9a1 1 0 01-1.5-1.5l5.3-5.3"/></svg>';
+
+        function fmtReceived(s) {
+            const d = new Date(s);
+            if (isNaN(d)) return '';
+            const today = new Date();
+            const sameDay = d.toDateString() === today.toDateString();
+            return sameDay ? fmtTime(d) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + fmtTime(d);
+        }
+
+        // Enter = Ask AI, Ctrl+Enter = Draft, Shift+Enter = new line
+        function promptKeys(e, el) {
+            if (e.key !== 'Enter' || e.isComposing || e.shiftKey) return;
+            e.preventDefault();
+            const row = el.closest('.control-row');
+            (e.ctrlKey || e.metaKey ? row.querySelector('.btn-draft') : row.querySelector('.btn-ask')).click();
+        }
+
+        async function postJson(path, payload) {
+            try {
+                const res = await fetch('http://localhost:8000' + path, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                return await res.json();
+            } catch (e) {
+                return { status: 'error', message: 'Could not reach the local server.' };
+            }
+        }
+
+        async function handleOpen(id, btn) {
+            if (!id) return;
+            const label = btn.innerText;
+            btn.innerText = 'Opening...';
+            const r = await postJson('/api/open', { Id: id });
+            btn.innerText = r.status === 'success' ? 'Opened' : 'Error';
+            setTimeout(() => { btn.innerText = label; }, 2000);
+        }
+
+        async function handleAttachment(btn) {
+            const name = btn.querySelector('span').innerText;
+            btn.classList.add('busy');
+            const r = await postJson('/api/attachment', { Id: btn.dataset.id, Index: +btn.dataset.index });
+            btn.classList.remove('busy');
+            if (r.status !== 'success') {
+                btn.querySelector('span').innerText = r.message || 'Could not open';
+                setTimeout(() => { btn.querySelector('span').innerText = name; }, 3500);
+            }
+        }
+
+        function autoGrow(el) {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 2 + 'px';
+        }
+
+        function toggleAction(btn) {
+            const panel = btn.closest('.email-card').querySelector('.action-panel');
+            const open = panel.style.display === 'none';
+            panel.style.display = open ? 'block' : 'none';
+            btn.classList.toggle('open', open);
+            btn.innerText = open ? 'Close' : 'Take action';
+            if (open) panel.querySelector('.input-prompt').focus();
+        }
+
+        async function handleClear(btn) {
+            const card = btn.closest('.email-card');
+            const ids = JSON.parse(card.dataset.ids || '[]');
+            if (!ids.length) return;
+            btn.innerText = 'Clearing...';
+            btn.disabled = true;
+            const ok = await markRead(ids);
+            if (!ok) {
+                btn.innerText = 'Error';
+                setTimeout(() => { btn.innerText = 'Clear'; btn.disabled = false; }, 2500);
+                return;
+            }
+            const container = card.parentElement;
+            card.classList.add('clearing');
+            setTimeout(() => {
+                card.remove();
+                forgetCleared(card.dataset.ids);
+                if (container && !container.querySelector('.email-card')) {
+                    const msg = container.dataset.empty || (container.id === 'reqContainer' ? 'No unread response items.' : 'No unread FYI items.');
+                    container.innerHTML = `<div class="muted">${msg}</div>`;
+                }
+            }, 260);
+        }
+
+        async function handleAsk(id, btn) {
+            const card = btn.closest('.email-card');
+            const input = card.querySelector('.input-prompt');
+            const box = card.querySelector('.ai-answer');
+            const question = input.value.trim();
+            if (!question || !id || id === 'undefined') return;
+
+            btn.innerText = 'Thinking...';
+            btn.disabled = true;
+            box.style.display = 'block';
+            box.innerHTML = `<div class="ai-q">Q: ${esc(question)}</div><div class="muted">Reading the thread...</div>`;
+            try {
+                const res = await fetch('http://localhost:8000/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Id: id, Prompt: question })
+                });
+                const data = await res.json();
+                box.innerHTML = data.status === 'success'
+                    ? `<div class="ai-q">Q: ${esc(question)}</div><div class="ai-a">${esc(data.answer)}</div>`
+                    : `<div class="ai-q">Q: ${esc(question)}</div><div class="muted">Error: ${esc(data.message || 'AI request failed')}</div>`;
+                if (data.status === 'success') { input.value = ''; autoGrow(input); }
+            } catch (e) {
+                box.innerHTML = '<div class="muted">Could not reach the local server.</div>';
+            }
+            btn.innerText = 'Ask AI';
+            btn.disabled = false;
+        }
+
+        async function handleDraft(id, btn) {
+            const input = btn.closest('.email-card').querySelector('.input-prompt');
+            const prompt = input.value;
+            if (!prompt || !id || id === 'undefined') return;
+
+            btn.innerText = 'Drafting...';
+            btn.disabled = true;
+            let ok = false;
+            try {
+                const res = await fetch('http://localhost:8000/api/reply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Id: id, Prompt: prompt })
+                });
+                ok = (await res.json()).status === 'success';
+            } catch (e) {}
+            btn.innerText = ok ? 'Opened' : 'Error';
+            if (ok) { input.value = ''; autoGrow(input); }
+            setTimeout(() => {
+                btn.innerText = 'Draft';
+                btn.disabled = false;
+                if (ok) {
+                    const card = btn.closest('.email-card');
+                    const toggle = card.querySelector('.btn-take-action');
+                    if (card.querySelector('.action-panel').style.display !== 'none') toggleAction(toggle);
+                }
+            }, 2500);
+        }
+
+        // --- RUNNING NOTES (nested checklist stored in todo.json) ---
+        let todos = [];
+        const newId = () => Date.now().toString() + Math.floor(Math.random() * 1000);
+
+        async function loadNotes() {
+            try {
+                const res = await fetch('http://localhost:8000/api/todo');
+                let data = await res.json();
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); }
+                    catch (e) { data = data.trim() ? [{ id: newId(), text: data.trim(), checked: false, children: [] }] : []; }
+                }
+                todos = Array.isArray(data) ? data : [];
+            } catch (e) {
+                todos = [];
+            }
+            renderTodos();
+        }
+
+        async function saveNotes() {
+            await fetch('http://localhost:8000/api/todo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(todos)
+            });
+        }
+
+        function addTodo() {
+            const input = document.getElementById('newTodo');
+            const text = input.value.trim();
+            if (!text) return;
+            todos.push({ id: newId(), text, checked: false, children: [] });
+            input.value = '';
+            saveNotes();
+            renderTodos();
+        }
+
+        function clearCompleted() {
+            todos = todos.filter(t => !t.checked);
+            todos.forEach(t => { if (t.children) t.children = t.children.filter(c => !c.checked); });
+            saveNotes();
+            renderTodos();
+        }
+
+        function renderTodos(focusId) {
+            const list = document.getElementById('todoList');
+            list.className = '';
+            list.innerHTML = '';
+            if (!todos.length) {
+                list.innerHTML = '<div class="muted">No tasks yet.</div>';
+                return;
+            }
+            todos.forEach(t => list.appendChild(todoNode(t, todos, 0)));
+            if (focusId) {
+                const el = list.querySelector(`[data-id="${focusId}"]`);
+                if (el) el.focus();
+            }
+        }
+
+        function todoNode(item, parentArr, depth) {
+            const wrap = document.createElement('div');
+            wrap.className = 'todo-item' + (depth === 0 ? ' todo-parent' : ' todo-child');
+
+            const row = document.createElement('div');
+            row.className = 'todo-row';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = !!item.checked;
+            cb.onchange = () => {
+                item.checked = cb.checked;
+                (item.children || []).forEach(c => c.checked = cb.checked);
+                saveNotes();
+                renderTodos();
+            };
+
+            const txt = document.createElement('input');
+            txt.type = 'text';
+            txt.className = 'todo-text' + (item.checked ? ' done' : '');
+            txt.value = item.text || '';
+            txt.dataset.id = item.id;
+            txt.onkeydown = e => { if (e.key === 'Enter') txt.blur(); };
+            txt.onblur = () => {
+                const v = txt.value.trim();
+                if (!v) {
+                    const i = parentArr.indexOf(item);
+                    if (i >= 0) parentArr.splice(i, 1);
+                    saveNotes();
+                    setTimeout(() => renderTodos(), 0);
+                } else if (v !== item.text) {
+                    item.text = v;
+                    saveNotes();
+                }
+            };
+
+            row.appendChild(cb);
+            row.appendChild(txt);
+
+            const kids = item.children || [];
+            if (depth === 0 && kids.length) {
+                const cnt = document.createElement('span');
+                cnt.className = 'todo-count';
+                cnt.innerText = `${kids.filter(c => c.checked).length}/${kids.length}`;
+                row.appendChild(cnt);
+            }
+
+            if (depth === 0) {
+                const add = document.createElement('button');
+                add.className = 'todo-btn';
+                add.innerText = '+ Sub-task';
+                add.onclick = () => {
+                    const child = { id: newId(), text: '', checked: false };
+                    item.children = kids;
+                    kids.push(child);
+                    renderTodos(child.id);
+                };
+                row.appendChild(add);
+            }
+
+            const del = document.createElement('button');
+            del.className = 'todo-btn';
+            del.innerText = 'Delete';
+            del.onclick = () => {
+                const i = parentArr.indexOf(item);
+                if (i >= 0) parentArr.splice(i, 1);
+                saveNotes();
+                renderTodos();
+            };
+            row.appendChild(del);
+
+            wrap.appendChild(row);
+            kids.forEach(c => wrap.appendChild(todoNode(c, kids, depth + 1)));
+            return wrap;
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.getElementById('tab-catchup').style.display = tab === 'catchup' ? 'block' : 'none';
+            if (tab === 'catchup') loadCatchupResult();
+
+            document.getElementById('tab-inbox').style.display = tab === 'inbox' ? 'grid' : 'none';
+            document.getElementById('tab-notes').style.display = tab === 'notes' ? 'block' : 'none';
+            document.getElementById('tab-tomorrow').style.display = tab === 'tomorrow' ? 'block' : 'none';
+        }
+
+        // --- INBOX ASSISTANT ---
+        const asstHistory = [];      // [{Role, Text}] sent with follow-up questions
+        let asstBusy = false;
+
+        function toggleAssistant(force) {
+            const panel = document.getElementById('asstPanel');
+            const open = force != null ? force : panel.style.display === 'none';
+            panel.style.display = open ? 'flex' : 'none';
+            document.getElementById('asstFab').classList.toggle('open', open);
+            if (open) document.getElementById('asstInput').focus();
+        }
+
+        function clearAssistant() {
+            asstHistory.length = 0;
+            const log = document.getElementById('asstLog');
+            log.querySelectorAll('.asst-msg').forEach(n => n.remove());
+            log.querySelector('.asst-hint').style.display = '';
+            document.getElementById('asstInput').focus();
+        }
+
+        function asstKeys(e) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); askAssistant(); }
+            if (e.key === 'Escape') toggleAssistant(false);
+        }
+
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleAssistant(true); }
+        });
+
+        function asstAdd(cls, html) {
+            const log = document.getElementById('asstLog');
+            log.querySelector('.asst-hint').style.display = 'none';
+            const d = document.createElement('div');
+            d.className = 'asst-msg ' + cls;
+            d.innerHTML = html;
+            log.appendChild(d);
+            log.scrollTop = log.scrollHeight;
+            return d;
+        }
+
+        function renderAnswer(bubble, res) {
+            const text = esc(res.Answer || '').replace(/\[(\d+)\]/g, '<span class="asst-cite">[$1]</span>');
+            const srcs = (res.Sources || []).map(s => {
+                const d = new Date(s.Date);
+                const when = isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const links = (s.Links || []).map(l =>
+                    `<a class="chip chip-link" href="${esc(l.Url)}" target="_blank" rel="noopener" title="${esc(l.Url)}">${ICON_LINK}<span>${esc(l.Title || l.Url)}</span></a>`).join('');
+                const atts = (s.Attachments || []).map(a =>
+                    `<button class="chip chip-att" data-id="${esc(a.Id)}" data-index="${a.Index}" onclick="handleAttachment(this)" title="Open ${esc(a.Name)}">${ICON_CLIP}<span>${esc(a.Name)}</span><span class="chip-size">${a.SizeKB} KB</span></button>`).join('');
+                return `<div class="asst-src-wrap">
+                    <button class="asst-src" onclick="handleOpen('${esc(s.Id)}', this.querySelector('.asst-src-meta'))" title="Open in Outlook">
+                    <span class="asst-src-n">[${s.N}]</span><span class="asst-src-subj">${esc(s.Subject)}</span><span class="asst-src-meta">${esc(s.From)} · ${when}</span></button>
+                    ${(links || atts) ? `<div class="chip-row asst-chips">${atts}${links}</div>` : ''}</div>`;
+            }).join('');
+            bubble.innerHTML = `<div class="asst-answer">${text}</div>` +
+                (srcs ? `<div class="asst-sources">${srcs}</div>` : '') +
+                (res.Searched ? `<div class="asst-searched">Searched: ${esc(res.Searched)}</div>` : '');
+            const log = document.getElementById('asstLog');
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function askAssistant() {
+            if (asstBusy) return;
+            const input = document.getElementById('asstInput');
+            const q = input.value.trim();
+            if (!q) return;
+            input.value = ''; autoGrow(input);
+            asstAdd('asst-user', esc(q));
+            const bubble = asstAdd('asst-bot', '<span class="asst-pending">Starting</span>');
+            asstBusy = true;
+            document.getElementById('asstSend').disabled = true;
+            const t0 = Date.now();
+            try {
+                const start = await postJson('/api/assistant/ask', { Question: q, History: asstHistory.slice(-8) });
+                if (!start.id) throw new Error(start.message || 'Could not start');
+                let s;
+                while (true) {
+                    await new Promise(r => setTimeout(r, 1500));
+                    s = await (await fetch('http://localhost:8000/api/assistant/status?id=' + start.id, { cache: 'no-store' })).json();
+                    if (s.Status !== 'running') break;
+                    bubble.innerHTML = `<span class="asst-pending">${esc(s.Stage)} · ${Math.round((Date.now() - t0) / 1000)}s</span>`;
+                }
+                if (s.Status === 'done' && s.Result) {
+                    renderAnswer(bubble, s.Result);
+                    asstHistory.push({ Role: 'User', Text: q }, { Role: 'Assistant', Text: s.Result.Answer || '' });
+                } else {
+                    bubble.innerHTML = `<div class="asst-answer">Something went wrong: ${esc(s.Error || s.Status)}</div>`;
+                }
+            } catch (e) {
+                bubble.innerHTML = `<div class="asst-answer">Could not reach the local server.</div>`;
+            }
+            asstBusy = false;
+            document.getElementById('asstSend').disabled = false;
+            input.focus();
+        }
+
+        // --- SERVER LIFECYCLE ---
+        // Heartbeat keeps the server alive. Closing this window tells it to shut down
+        // (the server waits a few seconds first, so a reload does not stop it).
+        let hbFails = 0;
+        let hbTimer = null;
+        async function heartbeat() {
+            clearTimeout(hbTimer);
+            try {
+                const r = await fetch('http://localhost:8000/api/heartbeat', { cache: 'no-store' });
+                if (!r.ok) throw new Error(r.status);
+                if (hbFails >= 2) {
+                    document.getElementById('serverOverlay').classList.remove('show');
+                    fetchData();
+                }
+                hbFails = 0;
+            } catch (e) {
+                hbFails++;
+                if (hbFails >= 2) document.getElementById('serverOverlay').classList.add('show');
+            }
+            hbTimer = setTimeout(heartbeat, hbFails ? 5000 : 30000);
+        }
+        window.addEventListener('pagehide', () => navigator.sendBeacon('http://localhost:8000/api/closing'));
+        heartbeat();
+
+        fetchData();
+        loadNotes();
+        pollCatchup();
+        setInterval(updateNowLine, 60000);
+
+        // Auto-refresh every 15 minutes. Skips a cycle while an email card has unsent
+        // instruction text, so a half-typed prompt is not wiped.
+        const REFRESH_MS = 15 * 60 * 1000;
+        setInterval(() => {
+            const busy = [...document.querySelectorAll('.email-card .input-prompt')].some(i => i.value.trim());
+            if (busy) {
+                document.getElementById('lastUpdated').innerText = 'Auto-refresh paused (unsent text on screen)';
+                return;
+            }
+            fetchData();
+        }, REFRESH_MS);
+    </script>
+</body>
+</html>
