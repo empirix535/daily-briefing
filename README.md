@@ -15,7 +15,7 @@ Everything runs on your own PC. The AI is Claude, used through the Claude Code c
 - **Links and attachments.** Shared documents (SharePoint, OneDrive, Google Docs and Drive, Teams, Zoom, and more) and real file attachments appear as one-click chips. Logos and signature images are skipped. Duplicates are merged.
 - **Reply drafting.** Type an instruction and press Ctrl+Enter. A Reply All window opens in Outlook with a short, direct draft above the quoted thread. Nothing is ever sent for you.
 - **Ask AI about a thread.** Press Enter to ask a question about a specific email thread.
-- **Inbox assistant.** A chat box (Ctrl+K) that searches your Inbox, its subfolders, and Sent Items and answers with cited sources. It can also open a new email draft from a request like "Email Sam asking for the report by Friday".
+- **Inbox assistant.** A chat box (Ctrl+K) that searches your Inbox, its subfolders, and Sent Items and answers with cited sources. It can also open a new email draft ("Email Sam asking for the report by Friday"), set up, move, or cancel meetings ("Cancel my 3 PM with Jordan tomorrow"), and find times when colleagues are free. Everything opens in Outlook for you to review and send.
 - **Catch-up.** After two or more missed workdays, a banner offers a full rundown: what needs you now, deadlines, what happened by project, what was resolved without you, and the meetings you missed.
 - **Running notes** with nested checklists, and **tomorrow's agenda**.
 - **Clear** marks a whole conversation as read in Outlook.
@@ -72,6 +72,7 @@ Your personal settings live in `settings.json` (created by the installer; see `s
 | `UserDescription` | One line of context for the AI, such as your role and organization |
 | `InternalDomains` | Your organization's email domains. Mail from these senders is never pre-filtered. |
 | `ClaudeModel`, `AssistantModel`, `CatchupModel` | `haiku` (fastest), `sonnet` (better answers), or `opus` |
+| `AskAboutInvites`, `InviteDays` | Show meeting invites you haven't answered (next 7 days by default) at the top of the dashboard, with Open and Dismiss buttons |
 | `CloseOutlookOnExit` | Quit Outlook when the dashboard closes (never while a draft window is open) |
 | `Port` | Local port, 8000 by default |
 

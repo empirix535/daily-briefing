@@ -11,6 +11,10 @@
     "CatchupModel": "sonnet",
     "AssistantModel": "haiku",
 
+    "_help_invites": "AskAboutInvites lists unanswered meeting invites in the next InviteDays at the top of the dashboard, with Open and Dismiss buttons.",
+    "AskAboutInvites": true,
+    "InviteDays": 7,
+
     "_help_other": "CloseOutlookOnExit quits Outlook when you close the dashboard (never while a draft window is open). Port only needs changing if 8000 is taken.",
     "CloseOutlookOnExit": true,
     "Port": 8000

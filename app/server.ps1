@@ -46,6 +46,10 @@ $Config = @{
     AssistantTimeout     = 120      # seconds per Claude call
     AssistantMaxThreads  = 8        # conversations read per question
 
+    # Meeting invites and live updates
+    AskAboutInvites      = $true    # show unanswered invites in the dashboard with Open / Dismiss buttons
+    InviteDays           = 7        # look this many days ahead
+
     Port                = 8000
     CloseOutlookOnExit  = $true # quit Outlook when the dashboard closes (skipped if a compose/read window is open)
     HeartbeatTimeoutSec = 150   # shut down if the dashboard stops checking in for this long
@@ -114,6 +118,7 @@ $Helpers = {
     $TodoPath      = Join-Path $Root "todo.json"
     $LastSeenPath  = Join-Path $Root "lastseen.json"
     $CatchupPath   = Join-Path $Root "catchup.json"
+    $InvitesPath   = Join-Path $Root "invites-opened.json"
 
     # Empty sandbox folder so the CLI has no project files in scope
     $ClaudeWorkDir = Join-Path $env:TEMP "briefing-claude"
@@ -863,11 +868,68 @@ $(ConvertTo-Json -InputObject $llmInput -Depth 6)
         return @{ Threads = $out; Handled = $handled; Scanned = $scanned }
     }
 
+    # Unanswered invites in the next InviteDays. The dashboard asks before opening any of them.
+    # Invites you opened or dismissed from the dashboard are remembered (data\invites-opened.json) and not asked again.
+    function Get-InviteState {
+        $done = @{}
+        if (Test-Path $InvitesPath) {
+            try { $o = Get-Content $InvitesPath -Raw | ConvertFrom-Json; foreach ($p in $o.PSObject.Properties) { $done[$p.Name] = [long]$p.Value } } catch {}
+        }
+        $cutoff = (Get-Date).AddDays(-30).Ticks   # forget entries after 30 days
+        foreach ($k in @($done.Keys)) { if ($done[$k] -lt $cutoff) { $done.Remove($k) } }
+        return $done
+    }
+    function Set-InviteHandled([string]$Key) {
+        $done = Get-InviteState
+        $done[$Key] = (Get-Date).Ticks
+        [System.IO.File]::WriteAllText($InvitesPath, ($done | ConvertTo-Json -Compress), (New-Object System.Text.UTF8Encoding($false)))
+    }
+    function Get-PendingInvites($Mapi) {
+        if (-not $Config.AskAboutInvites) { return ,@() }
+        $done = Get-InviteState
+        $from = (Get-Date).ToString("MM/dd/yyyy hh:mm tt")
+        $to   = (Get-Date).Date.AddDays([int]$Config.InviteDays + 1).ToString("MM/dd/yyyy hh:mm tt")
+        $items = $Mapi.GetDefaultFolder(9).Items
+        $items.IncludeRecurrences = $true
+        $items.Sort("[Start]")
+        $out = @(); $seen = @{}
+        foreach ($ev in $items.Restrict("[Start] <= '$to' AND [End] > '$from'")) {
+            try {
+                if ($ev.MeetingStatus -ne 3 -or $ev.ResponseStatus -ne 5) { continue }   # 3 = invite received, 5 = not answered yet
+                $key = [string]$ev.GlobalAppointmentID
+                if (-not $key) { $key = [string]$ev.EntryID }
+                if ($done.ContainsKey($key) -or $seen[$key]) { continue }
+                $seen[$key] = $true
+                $out += @{
+                    Key       = $key
+                    Id        = [string]$ev.EntryID   # an occurrence shares the series' EntryID, so this opens the whole series
+                    Subject   = [string]$ev.Subject
+                    When      = $ev.Start.ToString("ddd MMM d, h:mm tt")
+                    Organizer = [string]$ev.Organizer
+                    Recurring = [bool]$ev.IsRecurring
+                }
+            } catch {}
+        }
+        return ,$out
+    }
+
+    # Cheap change check for the dashboard's 90-second poll: newest Inbox item + pending invites. No AI involved.
+    function Get-ChangeInfo($Mapi) {
+        $newest = ""
+        try {
+            $items = $Mapi.GetDefaultFolder(6).Items
+            $items.Sort("[ReceivedTime]", $true)
+            $first = $items.GetFirst()
+            if ($first) { $newest = [string]$first.EntryID }
+        } catch {}
+        return @{ Mail = $newest; Invites = (Get-PendingInvites $Mapi) }
+    }
+
     function Get-CalendarRange($Mapi, [datetime]$From, [datetime]$To) {
         $days = @()
         for ($d = $From.Date; $d -le $To.Date; $d = $d.AddDays(1)) {
             if ($d.DayOfWeek -eq 'Saturday' -or $d.DayOfWeek -eq 'Sunday') { continue }
-            $ev = @(Get-CalendarItems $Mapi $d)
+            $ev = Get-CalendarItems $Mapi $d   # assign directly: @() would nest the list
             if ($ev.Count) { $days += @{ Date = $d.ToString("yyyy-MM-dd"); Events = $ev } }
         }
         return ,$days
@@ -1061,6 +1123,210 @@ $($Config.SignName)
         }
     }
 
+    # ---------------- Calendar actions (assistant) ----------------
+    function ConvertTo-LocalDate([string]$s) {
+        if (-not $s) { return $null }
+        try { return [datetime]::Parse($s, [System.Globalization.CultureInfo]::InvariantCulture) } catch { return $null }
+    }
+
+    # Meetings in a date range that match people / keywords / time (recurring occurrences included)
+    function Find-CalendarItems($Mapi, $Find) {
+        $from = ConvertTo-LocalDate ([string]$Find.From); if (-not $from) { $from = (Get-Date).Date }
+        $to   = ConvertTo-LocalDate ([string]$Find.To);   if (-not $to)   { $to = $from.AddDays(14) }
+        $items = $Mapi.GetDefaultFolder(9).Items
+        $items.IncludeRecurrences = $true
+        $items.Sort("[Start]")
+        $f = $from.Date.ToString("MM/dd/yyyy hh:mm tt"); $t = $to.Date.AddDays(1).AddMinutes(-1).ToString("MM/dd/yyyy hh:mm tt")
+        $words = @(@($Find.People) + @($Find.Keywords) | Where-Object { $_ } | ForEach-Object { ([string]$_).ToLower() })
+        $time = [string]$Find.Time
+        $me = ""; try { $me = [string]$Mapi.CurrentUser.Name } catch {}
+        $out = @()
+        foreach ($a in $items.Restrict("[Start] <= '$t' AND [End] > '$f'")) {
+            if ($a.AllDayEvent) { continue }
+            $hay = ("$($a.Subject) $($a.Organizer) $($a.RequiredAttendees) $($a.OptionalAttendees) $($a.Location)").ToLower()
+            $score = 0
+            foreach ($w in $words) { if ($hay.Contains($w)) { $score++ } }
+            if ($words.Count -and -not $score) { continue }
+            if ($time -match '^(\d{1,2}):(\d{2})$') {
+                $want = $a.Start.Date.AddHours([int]$Matches[1]).AddMinutes([int]$Matches[2])
+                if ([math]::Abs(($a.Start - $want).TotalMinutes) -gt 45) { continue }
+            }
+            $isOrg = ($a.MeetingStatus -eq 0) -or ($a.ResponseStatus -eq 1) -or ($me -and [string]$a.Organizer -eq $me)
+            $out += @{
+                Id = [string]$a.EntryID; Subject = [string]$a.Subject; Start = $a.Start.ToString("yyyy-MM-ddTHH:mm:ss")
+                When = $a.Start.ToString("ddd MMM d, h:mm tt"); Score = $score
+                IsOrganizer = [bool]$isOrg; IsMeeting = ($a.MeetingStatus -ne 0); IsRecurring = [bool]$a.IsRecurring
+            }
+            if ($out.Count -ge 25) { break }
+        }
+        $best = if ($out.Count) { ($out | ForEach-Object { $_.Score } | Measure-Object -Maximum).Maximum } else { 0 }
+        return ,@($out | Where-Object { $_.Score -eq $best })
+    }
+
+    # Open the right Outlook window for a calendar action. Never sends or saves on its own.
+    function Invoke-CalendarAction($Outlook, $Mapi, $P) {
+        $bring = { param($it) try { $insp = $it.GetInspector; if ($insp.WindowState -eq 1) { $insp.WindowState = 2 }; $insp.Activate() } catch {} }
+        $fmt = { param($a) "$($a.Start.ToString('ddd MMM d, h:mm tt'))-$($a.End.ToString('h:mm tt'))" }
+
+        if ($P.Action -eq "new") {
+            $start = ConvertTo-LocalDate ([string]$P.Start)
+            if (-not $start) { return "I couldn't tell when the meeting should start. Try including a day and time." }
+            $appt = $Outlook.CreateItem(1)   # appointment
+            $appt.Start = $start
+            $appt.Duration = if ([int]$P.DurationMinutes -gt 0) { [int]$P.DurationMinutes } else { 30 }
+            $appt.Subject = if ($P.Subject) { [string]$P.Subject } else { "Meeting" }
+            if ($P.Location) { $appt.Location = [string]$P.Location }
+            if ($P.Agenda) { $appt.Body = [string]$P.Agenda }
+            $added = @()
+            foreach ($r in @($P.Attendees)) { if ($r) { $x = $appt.Recipients.Add([string]$r); $x.Type = 1; $added += $x } }
+            foreach ($r in @($P.Optional))  { if ($r) { $x = $appt.Recipients.Add([string]$r); $x.Type = 2; $added += $x } }
+            if ($added.Count) { $appt.MeetingStatus = 1; [void]$appt.Recipients.ResolveAll() }
+            $appt.Display($false); & $bring $appt
+            $ok = @($added | Where-Object { $_.Resolved } | ForEach-Object { [string]$_.Name })
+            $bad = @($added | Where-Object { -not $_.Resolved } | ForEach-Object { [string]$_.Name })
+            $msg = "Opened a new " + $(if ($added.Count) { "meeting" } else { "calendar entry" }) + ": ""$($appt.Subject)"", $(& $fmt $appt)"
+            if ($ok.Count) { $msg += ", with " + ($ok -join ", ") }
+            $msg += ". " + $(if ($added.Count) { "Add a Teams link if you need one, then click Send." } else { "Click Save & Close to keep it." })
+            if ($bad.Count) { $msg += "`nI couldn't match " + ($bad -join ", ") + " in your address book. Fix them with Check Names." }
+            return $msg
+        }
+
+        if ($P.Action -eq "cancel-many" -or $P.Action -eq "batch") {
+            $lines = @(); $confirms = @()
+            foreach ($x in @($P.Items)) {
+                $one = @{}
+                if ($x -is [hashtable]) { $one = $x.Clone() } else { foreach ($prop in $x.PSObject.Properties) { $one[$prop.Name] = $prop.Value } }
+                if ($P.Action -eq "cancel-many") { $one.Action = "cancel" }
+                try {
+                    $r = Invoke-CalendarAction $Outlook $Mapi $one
+                    if ($r -is [hashtable]) { $lines += $r.Message; $confirms += $r.Confirm } else { $lines += $r }
+                } catch { $lines += "Could not open one of the meetings: $($_.Exception.Message)" }
+            }
+            $msg = if ($lines.Count -eq 1) { $lines[0] } else { "$($lines.Count) meetings:`n" + (($lines | ForEach-Object { "- " + $_ }) -join "`n") }
+            if ($confirms.Count) { return @{ Message = $msg; Confirm = $confirms } }
+            return $msg
+        }
+
+        # cancel / move: reopen the exact item (one occurrence of a recurring series unless Scope is "series")
+        $item = $Mapi.GetItemFromID([string]$P.Id)
+        if ($item.IsRecurring -and [string]$P.Scope -ne "series") {
+            $item = $item.GetRecurrencePattern().GetOccurrence((ConvertTo-LocalDate ([string]$P.OrigStart)))
+        }
+        $me = ""; try { $me = [string]$Mapi.CurrentUser.Name } catch {}
+        $isMeeting = ($item.MeetingStatus -ne 0)
+        $isOrg = (-not $isMeeting) -or ($item.ResponseStatus -eq 1) -or ($me -and [string]$item.Organizer -eq $me)
+        $scopeNote = if ($item.IsRecurring -and [string]$P.Scope -eq "series") { " (the whole series)" } elseif ([string]$P.Scope -ne "series" -and $item.RecurrenceState -ne 0) { " (this date only)" } else { "" }
+
+        if ($P.Action -eq "cancel") {
+            if (-not $isMeeting) {
+                # Personal entry (no attendees): confirm in the dashboard, then delete it
+                if ($P.Confirmed) {
+                    $subj = [string]$item.Subject; $when = & $fmt $item
+                    $item.Delete()
+                    return "Deleted ""$subj"" ($when)$scopeNote from your calendar."
+                }
+                return @{
+                    Message = "Ready to delete ""$($item.Subject)"" ($(& $fmt $item))$scopeNote. It has no attendees. Confirm below."
+                    Confirm = @(@{
+                        Subject = [string]$item.Subject; When = (& $fmt $item) + $scopeNote; Attendees = "Personal entry"; Note = ""; NoNote = $true; Button = "Delete entry"
+                        Payload = @{ Action = "cancel"; Id = [string]$P.Id; OrigStart = [string]$P.OrigStart; Scope = [string]$P.Scope; Confirmed = $true }
+                    })
+                }
+            }
+            if ($isOrg) {
+                # Outlook's Send Cancellation button fails on this account, so the dashboard confirms and the app sends.
+                if ($P.Confirmed) {
+                    $item.MeetingStatus = 5   # canceled
+                    if ($P.Message) { $item.Body = [string]$P.Message + "`r`n`r`n" + [string]$item.Body }
+                    $item.Send()
+                    return "Sent the cancellation for ""$($item.Subject)"" ($(& $fmt $item))$scopeNote."
+                }
+                $who = @($item.Recipients | Where-Object { $_.Type -ne 3 -and [string]$_.Name -ne $me } | ForEach-Object { [string]$_.Name })
+                return @{
+                    Message = "Ready to cancel ""$($item.Subject)"" ($(& $fmt $item))$scopeNote. Review it below."
+                    Confirm = @(@{
+                        Subject = [string]$item.Subject; When = (& $fmt $item) + $scopeNote; Attendees = ($who -join ", "); Note = [string]$P.Message
+                        Payload = @{ Action = "cancel"; Id = [string]$P.Id; OrigStart = [string]$P.OrigStart; Scope = [string]$P.Scope; Confirmed = $true }
+                    })
+                }
+            }
+            $resp = $item.Respond(2, $true)   # decline, no Outlook prompt; opens as a draft response
+            if ($P.Message) { $resp.Body = [string]$P.Message }
+            $resp.Display($false); & $bring $resp
+            return "You're an attendee, so I opened a decline for ""$($item.Subject)"" ($(& $fmt $item))$scopeNote. Click Send to decline."
+        }
+
+        if ($P.Action -eq "open") {
+            $item.Display($false); & $bring $item
+            $tail = if (-not $isMeeting) { "Click Save & Close when you're done." } elseif ($isOrg) { "Make your changes, then click Send Update." } else { "You're an attendee, so you can respond or propose a new time." }
+            return "Opened ""$($item.Subject)"" ($(& $fmt $item))$scopeNote. $tail"
+        }
+
+        if ($P.Action -eq "move") {
+            $new = ConvertTo-LocalDate ([string]$P.NewStart)
+            if (-not $new) { return "I couldn't tell the new time. Try something like ""move it to Friday at 10""." }
+            if (-not $isOrg) {
+                $item.Display($false); & $bring $item
+                return "You're an attendee on ""$($item.Subject)"", so only the organizer can move it. I opened it; use Propose New Time in the Outlook window."
+            }
+            $dur = if ([int]$P.DurationMinutes -gt 0) { [int]$P.DurationMinutes } else { $item.Duration }
+            $item.Start = $new
+            $item.Duration = $dur
+            if ($P.Message -and $isMeeting) { $item.Body = [string]$P.Message + "`r`n`r`n" + [string]$item.Body }
+            $item.Display($false); & $bring $item
+            $tail = if ($isMeeting) { "Click Send Update to notify attendees." } else { "Click Save & Close to keep the change." }
+            return "Opened ""$($item.Subject)"" moved to $(& $fmt $item)$scopeNote. $tail Close without saving to leave it as it was."
+        }
+        return "Nothing to do."
+    }
+
+    # Common free times for you and colleagues (free/busy works for people in your organization)
+    function Find-FreeTimes($Mapi, $Free) {
+        $dur = if ([int]$Free.DurationMinutes -gt 0) { [int]$Free.DurationMinutes } else { 30 }
+        $from = ConvertTo-LocalDate ([string]$Free.From); if (-not $from) { $from = (Get-Date).Date }
+        $to = ConvertTo-LocalDate ([string]$Free.To)
+        if (-not $to) { $to = $from; $n = 0; while ($n -lt 5) { $to = $to.AddDays(1); if ($to.DayOfWeek -ne 'Saturday' -and $to.DayOfWeek -ne 'Sunday') { $n++ } } }
+        $dayStart = if ([string]$Free.DayStart -match '^(\d{1,2}):(\d{2})$') { [int]$Matches[1] * 60 + [int]$Matches[2] } else { 540 }
+        $dayEnd   = if ([string]$Free.DayEnd   -match '^(\d{1,2}):(\d{2})$') { [int]$Matches[1] * 60 + [int]$Matches[2] } else { 1020 }
+        $start = $from.Date
+        $entries = @(@{ Name = "you"; Entry = $Mapi.CurrentUser.AddressEntry })
+        $missing = @()
+        foreach ($p in @($Free.People)) {
+            if (-not $p) { continue }
+            $r = $Mapi.CreateRecipient([string]$p); [void]$r.Resolve()
+            if ($r.Resolved) { $entries += @{ Name = [string]$r.Name; Entry = $r.AddressEntry } } else { $missing += [string]$p }
+        }
+        $busy = @()
+        foreach ($e in $entries) {
+            try { $busy += ,([string]$e.Entry.GetFreeBusy($start, 30, $true)) }   # one character per 30 minutes: 0 = free
+            catch { $missing += $e.Name }
+        }
+        $need = [math]::Ceiling($dur / 30.0)
+        $slots = @()
+        $days = [math]::Min(21, [int]($to.Date - $start).TotalDays + 1)
+        for ($d = 0; $d -lt $days -and $slots.Count -lt 5; $d++) {
+            $day = $start.AddDays($d)
+            if ($day.DayOfWeek -eq 'Saturday' -or $day.DayOfWeek -eq 'Sunday') { continue }
+            for ($m = $dayStart; $m + $dur -le $dayEnd -and $slots.Count -lt 5; $m += 30) {
+                $slotStart = $day.AddMinutes($m)
+                if ($slotStart -lt (Get-Date)) { continue }
+                $idx = $d * 48 + [int]($m / 30)
+                $allFree = $true
+                foreach ($b in $busy) { for ($k = 0; $k -lt $need; $k++) { if ($idx + $k -ge $b.Length -or $b[$idx + $k] -ne '0') { $allFree = $false; break } }; if (-not $allFree) { break } }
+                if ($allFree) {
+                    $slots += @{ Start = $slotStart.ToString("yyyy-MM-ddTHH:mm"); Label = $slotStart.ToString("ddd MMM d, h:mm tt") }
+                    $m += 30   # space suggestions out a little
+                }
+            }
+        }
+        $names = @($entries | Select-Object -Skip 1 | ForEach-Object { $_.Name })
+        $who = if ($names.Count) { "you and " + ($names -join ", ") } else { "you" }
+        $note = if ($slots.Count) { "Times when $who are all free for $dur minutes:`n" + (($slots | ForEach-Object { "- " + $_.Label }) -join "`n") + "`nPick one below to open a meeting request." }
+                else { "I couldn't find a $dur-minute window when $who are all free in that range. Try a wider range or a shorter meeting." }
+        if ($missing.Count) { $note += "`nI couldn't see free/busy for " + ($missing -join ", ") + " (outside your organization or not found), so they aren't included." }
+        return @{ Slots = $slots; Note = $note; Duration = $dur }
+    }
+
     # Files that are never opened straight from the dashboard
     $BlockedExt = '\.(exe|com|bat|cmd|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|msi|msp|scr|lnk|hta|jar|cpl|reg|pif|application|gadget|iso|img|vhd|vhdx)$'
 
@@ -1199,8 +1465,10 @@ Today is $today. Decide what $($Config.UserName) wants, then fill in the plan.
 Respond with ONLY a JSON object, no prose and no code fences:
 {"Intent":"search","People":[],"Keywords":[],"From":"","To":""}
 
-- Intent: "compose" if they ask you to write, draft, start, or open a NEW email to someone (for example "email Alex asking for the report", "draft a note to Jordan about Friday"). Otherwise "search".
-  For "compose", People are the intended recipients and the other fields can stay empty.
+- Intent: "compose" if they ask you to write, draft, start, or open a NEW email to someone (for example "email Alex asking for the report", "draft a note to Jordan about Friday").
+  "calendar" if they ask to schedule, set up, book, cancel, decline, move, reschedule, open, or edit a meeting or appointment, add a calendar entry, or find a time when people are free.
+  Otherwise "search".
+  For "compose" and "calendar", the other fields can stay empty.
 
 - People: first names, last names, or email fragments of the people involved, exactly as they wrote them. [] if none.
 - Keywords: 1-5 distinctive words or short phrases likely to appear in the subject or body, plus common variants or abbreviations (for example "CEA", "cost-effectiveness", "IRB", "ethics review"). Leave out generic words such as email, thread, meeting, decide, announce, update.
@@ -1214,12 +1482,101 @@ Question: $Question
 "@
         $raw = $null
         try { $raw = ConvertFrom-LLMJson (Invoke-LLM $planPrompt $true $model) | Select-Object -First 1 } catch {}
-        $intent = if ([string]$raw.Intent -eq "compose") { "compose" } else { "search" }
+        $intent = if ([string]$raw.Intent -in @("compose", "calendar")) { [string]$raw.Intent } else { "search" }
         $plan = [pscustomobject]@{
             People   = @($raw.People | Where-Object { $_ } | ForEach-Object { [string]$_ } | Select-Object -First 4)
             Keywords = @($raw.Keywords | Where-Object { $_ } | ForEach-Object { [string]$_ } | Select-Object -First 6)
             From     = if ([string]$raw.From -match '^\d{4}-\d{2}-\d{2}$') { [string]$raw.From } else { "" }
             To       = if ([string]$raw.To -match '^\d{4}-\d{2}-\d{2}$') { [string]$raw.To } else { "" }
+        }
+
+        # ---- Calendar: new, cancel, move, find a free time (everything opens for review; nothing is sent) ----
+        if ($intent -eq "calendar") {
+            $state.Stage = "Working out the calendar request"
+            $nowText = (Get-Date).ToString("dddd, yyyy-MM-dd HH:mm")
+            $calPrompt = @"
+Now is $nowText (local time). Turn $($Config.UserName)'s calendar request into a plan.
+Respond with ONLY a JSON object, no prose and no code fences:
+{"Action":"new","Subject":"","Start":"","DurationMinutes":30,"Attendees":[],"Optional":[],"Location":"","Agenda":"","Find":{"From":"","To":"","Time":"","People":[],"Keywords":[]},"Targets":[],"All":false,"NewStart":"","Scope":"occurrence","Message":"","Free":{"People":[],"From":"","To":"","DurationMinutes":30,"DayStart":"09:00","DayEnd":"17:00"}}
+
+- Action: "new" (schedule a meeting, or add an appointment or entry just for them), "cancel" (cancel or decline an existing meeting), "move" (reschedule an existing meeting), "open" (open an existing meeting or appointment so they can edit it themselves), or "free" (find times when people are free).
+- All date-times as YYYY-MM-DDTHH:mm in local time; dates as YYYY-MM-DD. "next Tuesday" means the Tuesday of next week; "Tuesday" alone means the coming Tuesday.
+- new: Subject 3-8 words. DurationMinutes defaults to 30. Attendees and Optional are names or email addresses exactly as given. Agenda is one short line only if they gave a topic, else "".
+- cancel / move / open: Find describes the EXISTING meeting. From/To cover the day or days mentioned (only "tomorrow" means both are tomorrow; no day mentioned means the next 14 days from today). Time is HH:mm if a time was given. People and Keywords are words that identify the meeting.
+- Several meetings: if they name more than one ("cancel my 3 PM and my 4:30"), put one entry per meeting in Targets, each shaped like Find ({"From","To","Time","People","Keywords"}), and leave Find empty.
+  If they describe a group ("both meetings with Jordan", "all my meetings Friday"), use ONE entry and set All to true.
+- move: NewStart is the new start. DurationMinutes is 0 unless they asked for a new length.
+- Scope: "series" only if they say all, every, or the whole series; otherwise "occurrence".
+- Message: a short note to include with the cancellation, decline, or update, only if they asked for one.
+- free: Free.People are the others involved; Free.From/To default to the next 5 workdays; working hours default to 09:00-17:00.
+Use the earlier conversation for follow-ups.
+
+Earlier conversation:
+$HistoryText
+
+Request: $Question
+"@
+            $c = $null
+            try { $c = ConvertFrom-LLMJson (Invoke-LLM $calPrompt $true $model) | Select-Object -First 1 } catch { throw "Claude did not understand the calendar request: $($_.Exception.Message)" }
+            $act = [string]$c.Action
+            $res = @{ Answer = ""; Sources = @(); Searched = ""; Choices = @(); Run = $null }
+
+            if ($act -eq "new") {
+                # The page opens it through /api/calendar/act: Outlook windows must come from the server's long-lived thread,
+                # or their Send buttons stop working once this job's thread ends.
+                $res.Run = @{ Action = "new"; Subject = $c.Subject; Start = $c.Start; DurationMinutes = $c.DurationMinutes; Attendees = @($c.Attendees); Optional = @($c.Optional); Location = $c.Location; Agenda = $c.Agenda }
+            }
+            elseif ($act -eq "cancel" -or $act -eq "move" -or $act -eq "open") {
+                $state.Stage = "Looking for the meeting(s) on your calendar"
+                $targets = @($c.Targets | Where-Object { $_ })
+                if (-not $targets.Count -and $c.Find) { $targets = @($c.Find) }
+                $all = [bool]$c.All
+                $base = @{ Action = $act; NewStart = $c.NewStart; DurationMinutes = $c.DurationMinutes; Scope = $c.Scope; Message = $c.Message }
+                $verb = @{ cancel = "Cancel"; move = "Move"; open = "Open" }[$act]
+                $toAct = @(); $ambiguous = @(); $missing = 0; $seen = @{}
+                foreach ($t in $targets) {
+                    $found = Find-CalendarItems $mapi $t   # assign directly: @() would nest the list
+                    if (-not $found.Count) { $missing++; continue }
+                    if ($found.Count -eq 1 -or ($all -and $act -eq "cancel" -and $found.Count -le 5)) {
+                        foreach ($f in $found) { $k = "$($f.Id)|$($f.Start)"; if (-not $seen[$k]) { $seen[$k] = $true; $toAct += $f } }
+                    } else {
+                        $ambiguous += ,@($found | Select-Object -First 8)
+                    }
+                }
+                # Moving several meetings to one new time makes no sense: ask which one
+                if ($act -eq "move" -and $toAct.Count -gt 1) { $ambiguous += ,@($toAct); $toAct = @() }
+
+                # Opened by the page through /api/calendar/act (see the note under "new")
+                if ($toAct.Count) { $res.Run = @{ Action = "batch"; Items = @($toAct | ForEach-Object { $base + @{ Id = $_.Id; OrigStart = $_.Start } }) } }
+                $parts = @()
+                if ($missing) { $parts += "I couldn't find $missing of the meetings you mentioned. Try the meeting's name, the person, or the day." }
+                if ($ambiguous.Count) {
+                    $parts += if ($ambiguous.Count -eq 1 -and -not $toAct.Count) { "I found $(@($ambiguous[0]).Count) meetings that could match. Which one?" } else { "Some requests matched more than one meeting. Pick below:" }
+                    foreach ($group in $ambiguous) {
+                        foreach ($f in $group) { $res.Choices += @{ Label = "$verb $($f.Subject) ($($f.When))"; Payload = ($base + @{ Id = $f.Id; OrigStart = $f.Start }) } }
+                        if ($act -eq "cancel" -and @($group).Count -gt 1) {
+                            $res.Choices += @{ Label = "Cancel all $(@($group).Count) of these"; Payload = @{ Action = "cancel-many"; Items = @($group | ForEach-Object { $base + @{ Id = $_.Id; OrigStart = $_.Start } }) } }
+                        }
+                    }
+                }
+                if (-not $parts.Count -and -not $toAct.Count) { $parts += "I couldn't find a matching meeting on your calendar." }
+                $res.Answer = $parts -join "`n`n"
+            }
+            elseif ($act -eq "free") {
+                $state.Stage = "Checking free/busy times"
+                $slots = Find-FreeTimes $mapi $c.Free
+                $res.Answer = $slots.Note
+                $res.Choices = @($slots.Slots | ForEach-Object {
+                    @{ Label = "Set up $($_.Label)"; Payload = @{ Action = "new"; Subject = ""; Start = $_.Start; DurationMinutes = $slots.Duration; Attendees = @($c.Free.People) } }
+                })
+            }
+            else {
+                $res.Answer = "I wasn't sure what to do on your calendar. Try something like ""Set up 30 minutes with Sam on Tuesday at 2"" or ""Cancel my 3 PM tomorrow""."
+            }
+            $state.Result = $res
+            $state.Status = "done"
+            Write-Log "Assistant calendar request ($act): '$Question'."
+            return
         }
 
         # ---- New email from scratch ----
@@ -1412,6 +1769,37 @@ $ServerLoop = {
                 Write-JsonResponse $response '{"ok":true}'
                 continue
             }
+            # API: cheap change check (new mail, new invites) for the dashboard's poll
+            if ($request.RawUrl -eq "/api/changes") {
+                try {
+                    $conn = Connect-Outlook
+                    Write-JsonResponse $response (@{ status = "success"; changes = (Get-ChangeInfo $conn.Mapi) } | ConvertTo-Json -Depth 6)
+                } catch {
+                    Write-JsonResponse $response (@{ status = "error"; message = $_.Exception.Message } | ConvertTo-Json)
+                }
+                continue
+            }
+            # API: open or dismiss an invite the dashboard asked about
+            if ($request.RawUrl -eq "/api/invite" -and $request.HttpMethod -eq "POST") {
+                $reader  = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
+                $reqBody = $reader.ReadToEnd() | ConvertFrom-Json
+                try {
+                    if ($reqBody.Action -eq "open") {
+                        $conn = Connect-Outlook
+                        $item = $conn.Mapi.GetItemFromID([string]$reqBody.Id)
+                        $item.Display($false)
+                        try { $insp = $item.GetInspector; if ($insp.WindowState -eq 1) { $insp.WindowState = 2 }; $insp.Activate() } catch {}
+                        Write-Log "Opened invite: $($item.Subject)."
+                    }
+                    Set-InviteHandled ([string]$reqBody.Key)
+                    Write-JsonResponse $response '{"status":"success"}'
+                } catch {
+                    Write-Log "Invite action failed: $($_.Exception.Message)" "WARN"
+                    Write-JsonResponse $response (@{ status = "error"; message = $_.Exception.Message } | ConvertTo-Json)
+                }
+                continue
+            }
+
             if ($request.RawUrl -eq "/api/heartbeat") {
                 $sync.LastHeartbeat = Get-Date
                 $sync.CloseAt = $null
@@ -1519,6 +1907,7 @@ $ServerLoop = {
                     tomorrowDate = $nextDay.ToString("yyyy-MM-dd")
                     emails       = @($processedEmails)
                     catchup      = $catchupInfo
+                    changes      = $(try { Get-ChangeInfo $mapi } catch { $null })
                 } | ConvertTo-Json -Depth 8
 
                 Write-JsonResponse $response $result
@@ -1556,6 +1945,24 @@ $ServerLoop = {
                 $sync.Assistant[$id].PS = $aps
                 $sync.Assistant[$id].Handle = $aps.BeginInvoke()
                 Write-JsonResponse $response (@{ id = $id } | ConvertTo-Json)
+                continue
+            }
+            if ($request.RawUrl -eq "/api/calendar/act" -and $request.HttpMethod -eq "POST") {
+                $reader  = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
+                $reqBody = $reader.ReadToEnd() | ConvertFrom-Json
+                try {
+                    $outlook = New-Object -ComObject Outlook.Application
+                    $mapi = $outlook.GetNamespace("MAPI")
+                    $P = @{}
+                    foreach ($prop in $reqBody.PSObject.Properties) { $P[$prop.Name] = $prop.Value }
+                    $r = Invoke-CalendarAction $outlook $mapi $P
+                    $out = if ($r -is [hashtable]) { @{ status = "success"; message = $r.Message; confirm = @($r.Confirm) } } else { @{ status = "success"; message = $r; confirm = @() } }
+                    Write-Log "Calendar action ($($P.Action)$(if ($P.Confirmed) { ', confirmed' })) done."
+                    Write-JsonResponse $response ($out | ConvertTo-Json -Depth 6)
+                } catch {
+                    Write-Log "Calendar action failed: $($_.Exception.Message)" "ERROR"
+                    Write-JsonResponse $response (@{ status = "error"; message = $_.Exception.Message } | ConvertTo-Json)
+                }
                 continue
             }
             if ($request.RawUrl -like "/api/assistant/status*") {
