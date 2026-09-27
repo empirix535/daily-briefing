@@ -189,9 +189,16 @@ $Helpers = {
             throw "Claude CLI timed out after $ClaudeTimeout s."
         }
         $Job.Proc.WaitForExit()
+        $cliOut = $null; try { $cliOut = $Job.Out.Result | ConvertFrom-Json } catch {}
+        # Usage limit (HTTP 429, "You've hit your session limit"): remember it so the dashboard and chat can say so
+        if ($cliOut -and ($cliOut.api_error_status -eq 429 -or (($cliOut.is_error -or $Job.Proc.ExitCode -ne 0) -and [string]$cliOut.result -match 'limit'))) {
+            if ($sync) { $sync.ClaudeLimit = @{ Message = [string]$cliOut.result; At = (Get-Date).ToString("s") } }
+            throw "Claude usage limit: $($cliOut.result)"
+        }
         if ($Job.Proc.ExitCode -ne 0) { throw "Claude CLI exit $($Job.Proc.ExitCode): $($Job.Err.Result) $($Job.Out.Result)" }
-        $cliOut = $Job.Out.Result | ConvertFrom-Json
+        if (-not $cliOut) { throw "Claude CLI returned output that was not JSON." }
         if ($cliOut.is_error) { throw "Claude CLI error: $($cliOut.result)" }
+        if ($sync) { $sync.ClaudeLimit = $null }
         return [string]$cliOut.result
     }
 
@@ -1481,7 +1488,13 @@ $HistoryText
 Question: $Question
 "@
         $raw = $null
-        try { $raw = ConvertFrom-LLMJson (Invoke-LLM $planPrompt $true $model) | Select-Object -First 1 } catch {}
+        try { $raw = ConvertFrom-LLMJson (Invoke-LLM $planPrompt $true $model) | Select-Object -First 1 }
+        catch {
+            # Without a plan the request would be misread as a plain search, so stop and say why
+            # Only blame the limit if Claude reported it on this attempt (within the last 2 minutes)
+            if ($sync.ClaudeLimit -and ((Get-Date) - [datetime]$sync.ClaudeLimit.At).TotalSeconds -lt 120) { throw "Claude usage limit reached: $($sync.ClaudeLimit.Message)" }
+            throw "Claude could not read the request: $($_.Exception.Message)"
+        }
         $intent = if ([string]$raw.Intent -in @("compose", "calendar")) { [string]$raw.Intent } else { "search" }
         $plan = [pscustomobject]@{
             People   = @($raw.People | Where-Object { $_ } | ForEach-Object { [string]$_ } | Select-Object -First 4)
@@ -1769,6 +1782,14 @@ $ServerLoop = {
                 Write-JsonResponse $response '{"ok":true}'
                 continue
             }
+            # API: the page reports its own errors here so they land in server.log
+            if ($request.RawUrl -eq "/api/clientlog" -and $request.HttpMethod -eq "POST") {
+                $reader = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
+                $txt = $reader.ReadToEnd()
+                Write-Log "Dashboard error: $($txt.Substring(0, [math]::Min(1500, $txt.Length)))" "WARN"
+                Write-JsonResponse $response '{"ok":true}'
+                continue
+            }
             # API: cheap change check (new mail, new invites) for the dashboard's poll
             if ($request.RawUrl -eq "/api/changes") {
                 try {
@@ -1908,6 +1929,7 @@ $ServerLoop = {
                     emails       = @($processedEmails)
                     catchup      = $catchupInfo
                     changes      = $(try { Get-ChangeInfo $mapi } catch { $null })
+                    claudeLimit  = $(if ($sync.ClaudeLimit) { $sync.ClaudeLimit.Message } else { "" })
                 } | ConvertTo-Json -Depth 8
 
                 Write-JsonResponse $response $result

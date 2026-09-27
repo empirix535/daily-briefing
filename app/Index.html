@@ -539,6 +539,8 @@
         }
         .cu-banner-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
         .inv-bar { display: flex; flex-direction: column; gap: 0.4rem; }
+        .limit-note { padding: 0.6rem 1rem; border: 1px solid var(--border-strong); background: var(--surface-2); border-radius: 0.7rem; font-size: 0.92rem; color: var(--text-sub); }
+        .limit-note b { color: var(--text-main); font-weight: 600; }
         .inv-row {
             display: flex; align-items: center; gap: 0.8rem;
             padding: 0.6rem 1rem; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 0.7rem; font-size: 0.95rem;
@@ -692,6 +694,8 @@
             <button class="btn-refresh" onclick="fetchData()">Refresh Data</button>
         </div>
     </header>
+
+    <div class="limit-note" id="limitNote" style="display:none;"></div>
 
     <div class="inv-bar" id="inviteBar" style="display:none;"></div>
 
@@ -854,7 +858,24 @@
             }
         }
 
-        let refreshing = false, lastMail = null, refreshDue = 0;
+        let refreshing = false, lastMail = null, refreshDue = 0, failStreak = 0;
+
+        // Page errors go to data\server.log so they can be diagnosed later
+        function reportError(where, err) {
+            try {
+                navigator.sendBeacon('http://localhost:8000/api/clientlog',
+                    where + ': ' + (err && err.message ? err.message : String(err)) + ' | ' + ((err && err.stack) || '').split('\n').slice(0, 4).join(' / '));
+            } catch (e) {}
+        }
+        window.addEventListener('error', e => reportError('page', e.error || e.message));
+        window.addEventListener('unhandledrejection', e => reportError('promise', e.reason));
+
+        function showClaudeLimit(msg) {
+            const n = document.getElementById('limitNote');
+            if (!msg) { n.style.display = 'none'; return; }
+            n.innerHTML = `<b>Claude usage limit reached.</b> ${esc(msg)}. New emails show without summaries, and the chat assistant is paused until then.`;
+            n.style.display = '';
+        }
         async function fetchData() {
             if (refreshing) return;
             refreshing = true;
@@ -883,11 +904,18 @@
                 renderTomorrow(data.tomorrow || [], data.tomorrowDate);
                 updateCatchupBanner(data.catchup);
                 if (data.changes) { lastMail = data.changes.Mail; renderInvites(data.changes.Invites); }
+                showClaudeLimit(data.claudeLimit);
+                failStreak = 0;
                 document.getElementById('lastUpdated').innerText = 'Updated ' + fmtTime(new Date());
             } catch (err) {
                 clearInterval(ticker);
-                document.getElementById('lastUpdated').innerText = /Outlook/.test(err.message) ? 'Outlook not ready, click Refresh Data' : 'Refresh failed';
+                const lu = document.getElementById('lastUpdated');
+                lu.innerText = /Outlook/.test(err.message) ? 'Outlook not ready, click Refresh Data' : 'Refresh failed';
+                lu.title = err.message;
                 console.error("Fetch error:", err);
+                reportError('fetchData', err);
+                // Retry on its own a few times (e.g. the server was still starting)
+                if (++failStreak <= 3) refreshDue = Date.now() + 20000;
                 document.getElementById('tomorrowContainer').innerHTML = '<div class="muted">Could not reach the local server.</div>';
             }
             refreshing = false;
@@ -1112,7 +1140,15 @@
             const noise = emails.filter(i => i.Category === 'Noise');
             const shown = emails.filter(i => i.Category !== 'Noise' && (i.Subject || i.CleanSubject));
             shown.forEach(item => {
-                const card = buildCard(item);
+                let card;
+                try { card = buildCard(item); }
+                catch (err) {
+                    // One bad card must not blank the whole inbox
+                    reportError('buildCard failed for "' + (item.CleanSubject || '') + '"', err);
+                    card = document.createElement('div');
+                    card.className = 'email-card';
+                    card.innerHTML = `<div class="muted">${esc(item.CleanSubject || 'Email')} could not be displayed. <button class="btn-refresh" onclick="handleOpen('${esc((item.Ids || [])[0] || '')}', this)">Open in Outlook</button></div>`;
+                }
                 const isReq = item.Category === 'Requires Response';
                 if (isReq) reqCont.appendChild(card);
                 else fyiCont.appendChild(card);
