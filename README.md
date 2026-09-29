@@ -70,6 +70,7 @@ Your personal settings live in `settings.json` (created by the installer; see `s
 |---|---|
 | `UserName`, `SignName`, `SignOff` | How drafts address and sign for you |
 | `UserDescription` | One line of context for the AI, such as your role and organization |
+| `Contacts` | Nicknames for the chat assistant, such as `"rachel": "rhatch@example.org"` |
 | `InternalDomains` | Your organization's email domains. Mail from these senders is never pre-filtered. |
 | `ClaudeModel`, `AssistantModel`, `CatchupModel` | `haiku` (fastest), `sonnet` (better answers), or `opus` |
 | `AskAboutInvites`, `InviteDays` | Show meeting invites you haven't answered (next 7 days by default) at the top of the dashboard, with Open and Dismiss buttons |

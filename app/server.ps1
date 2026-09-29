@@ -1171,6 +1171,21 @@ $($Config.SignName)
     }
 
     # Open the right Outlook window for a calendar action. Never sends or saves on its own.
+    # Nicknames from settings.json "Contacts" ({"rachel": "rhatch@example.org"}) map to exact addresses
+    function Resolve-Contact([string]$Name) {
+        $n = $Name.Trim()
+        if (-not $n -or $n -match '@') { return $n }
+        $c = $Config.Contacts
+        if ($c) {
+            foreach ($prop in $c.PSObject.Properties) {
+                if ($prop.Name -ieq $n -or $prop.Name -ieq ($n -split '\s+')[0]) { return [string]$prop.Value }
+            }
+        }
+        return $n
+    }
+    # A typed email address always works even if Outlook's lookup reports it unresolved
+    function Test-RecipientOk($R) { return ($R.Resolved -or [string]$R.Address -match '^[^@\s]+@[^@\s]+\.[^@\s]+$' -or [string]$R.Name -match '^[^@\s]+@[^@\s]+\.[^@\s]+$') }
+
     function Invoke-CalendarAction($Outlook, $Mapi, $P) {
         $bring = { param($it) try { $insp = $it.GetInspector; if ($insp.WindowState -eq 1) { $insp.WindowState = 2 }; $insp.Activate() } catch {} }
         $fmt = { param($a) "$($a.Start.ToString('ddd MMM d, h:mm tt'))-$($a.End.ToString('h:mm tt'))" }
@@ -1185,12 +1200,12 @@ $($Config.SignName)
             if ($P.Location) { $appt.Location = [string]$P.Location }
             if ($P.Agenda) { $appt.Body = [string]$P.Agenda }
             $added = @()
-            foreach ($r in @($P.Attendees)) { if ($r) { $x = $appt.Recipients.Add([string]$r); $x.Type = 1; $added += $x } }
-            foreach ($r in @($P.Optional))  { if ($r) { $x = $appt.Recipients.Add([string]$r); $x.Type = 2; $added += $x } }
+            foreach ($r in @($P.Attendees)) { if ($r) { $x = $appt.Recipients.Add((Resolve-Contact ([string]$r))); $x.Type = 1; $added += $x } }
+            foreach ($r in @($P.Optional))  { if ($r) { $x = $appt.Recipients.Add((Resolve-Contact ([string]$r))); $x.Type = 2; $added += $x } }
             if ($added.Count) { $appt.MeetingStatus = 1; [void]$appt.Recipients.ResolveAll() }
             $appt.Display($false); & $bring $appt
-            $ok = @($added | Where-Object { $_.Resolved } | ForEach-Object { [string]$_.Name })
-            $bad = @($added | Where-Object { -not $_.Resolved } | ForEach-Object { [string]$_.Name })
+            $ok = @($added | Where-Object { Test-RecipientOk $_ } | ForEach-Object { [string]$_.Name })
+            $bad = @($added | Where-Object { -not (Test-RecipientOk $_) } | ForEach-Object { [string]$_.Name })
             $msg = "Opened a new " + $(if ($added.Count) { "meeting" } else { "calendar entry" }) + ": ""$($appt.Subject)"", $(& $fmt $appt)"
             if ($ok.Count) { $msg += ", with " + ($ok -join ", ") }
             $msg += ". " + $(if ($added.Count) { "Add a Teams link if you need one, then click Send." } else { "Click Save & Close to keep it." })
@@ -1300,7 +1315,7 @@ $($Config.SignName)
         $missing = @()
         foreach ($p in @($Free.People)) {
             if (-not $p) { continue }
-            $r = $Mapi.CreateRecipient([string]$p); [void]$r.Resolve()
+            $r = $Mapi.CreateRecipient((Resolve-Contact ([string]$p))); [void]$r.Resolve()
             if ($r.Resolved) { $entries += @{ Name = [string]$r.Name; Entry = $r.AddressEntry } } else { $missing += [string]$p }
         }
         $busy = @()
@@ -1619,8 +1634,8 @@ Request: $Question
             $state.Stage = "Opening the draft in Outlook"
             $mail = $outlook.CreateItem(0)
             $added = @()
-            foreach ($r in @($d.To)) { if ($r) { $x = $mail.Recipients.Add([string]$r); $x.Type = 1; $added += $x } }
-            foreach ($r in @($d.Cc)) { if ($r) { $x = $mail.Recipients.Add([string]$r); $x.Type = 2; $added += $x } }
+            foreach ($r in @($d.To)) { if ($r) { $x = $mail.Recipients.Add((Resolve-Contact ([string]$r))); $x.Type = 1; $added += $x } }
+            foreach ($r in @($d.Cc)) { if ($r) { $x = $mail.Recipients.Add((Resolve-Contact ([string]$r))); $x.Type = 2; $added += $x } }
             [void]$mail.Recipients.ResolveAll()
             $mail.Subject = [string]$d.Subject
             $mail.Display($false)   # loads your signature
@@ -1633,7 +1648,7 @@ Request: $Question
             try { $insp = $mail.GetInspector; if ($insp.WindowState -eq 1) { $insp.WindowState = 2 }; $insp.Activate() } catch {}
 
             $ok = @(); $bad = @()
-            foreach ($r in $added) { if ($r.Resolved) { $ok += [string]$r.Name } else { $bad += [string]$r.Name } }
+            foreach ($r in $added) { if (Test-RecipientOk $r) { $ok += [string]$r.Name } else { $bad += [string]$r.Name } }
             $msg = "Opened a new email in Outlook"
             if ($ok.Count) { $msg += " to " + ($ok -join ", ") }
             $msg += ". Subject: ""$($mail.Subject)"". Review it and click Send when ready."

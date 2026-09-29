@@ -6,6 +6,9 @@
     "SignName": "Alex",
     "InternalDomains": [ "example.org" ],
 
+    "_help_contacts": "Nicknames the chat assistant understands. Say \"email Sam\" and it uses the address here.",
+    "Contacts": { "sam": "spark@example.org", "jordan": "jlee@example.org" },
+
     "_help_models": "haiku is fastest; sonnet gives better answers but is slower and uses more of your Claude limit.",
     "ClaudeModel": "haiku",
     "CatchupModel": "sonnet",

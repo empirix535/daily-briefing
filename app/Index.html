@@ -1486,6 +1486,7 @@
                 <div class="card-actions">
                     <button class="btn-take-action" onclick="toggleAction(this)">Take action</button>
                     <button class="btn-take-action" onclick="handleOpen('${newestId}', this)" title="Open the newest message in Outlook">Open in Outlook</button>
+                    <button class="btn-take-action" onclick="addEmailTask(this)" title="Add this email to Running Notes">Add to tasks</button>
                     <button class="btn-take-action btn-clear" onclick="handleClear(this)" title="Mark as read in Outlook and remove from the dashboard">Clear</button>
                 </div>
                 <div class="action-panel" style="display:none;">
@@ -1497,6 +1498,7 @@
                     <div class="ai-answer" style="display:none;"></div>
                 </div>
             `;
+            card._item = item;
             return card;
         }
 
@@ -1686,6 +1688,20 @@
             renderTodos();
         }
 
+        // "Add to tasks" on an email card: the task text is the subject plus what the email needs, with a link back to the email
+        async function addEmailTask(btn) {
+            const item = btn.closest('.email-card')._item || {};
+            const mailId = (item.Ids || [])[0] || '';
+            if (todos.some(t => t.mailId && t.mailId === mailId)) { btn.innerText = 'Already in tasks'; return; }
+            let text = (item.CleanSubject || 'Email') + (item.ActionTask ? ': ' + item.ActionTask : '');
+            if (item.Deadline) text += ' (due ' + item.Deadline + ')';
+            todos.push({ id: newId(), text, checked: false, children: [], mailId });
+            await saveNotes();
+            renderTodos();
+            btn.innerText = 'Added to tasks';
+            btn.disabled = true;
+        }
+
         function clearCompleted() {
             todos = todos.filter(t => !t.checked);
             todos.forEach(t => { if (t.children) t.children = t.children.filter(c => !c.checked); });
@@ -1766,6 +1782,14 @@
                     renderTodos(child.id);
                 };
                 row.appendChild(add);
+            }
+
+            if (item.mailId) {
+                const open = document.createElement('button');
+                open.className = 'todo-btn';
+                open.innerText = 'Open email';
+                open.onclick = () => handleOpen(item.mailId, open);
+                row.appendChild(open);
             }
 
             const del = document.createElement('button');
