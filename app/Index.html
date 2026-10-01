@@ -221,6 +221,13 @@
         }
 
         /* --- TABS --- */
+        .sticky-top {
+            position: sticky; top: 0; z-index: 40;
+            background: var(--bg);
+            display: flex; flex-direction: column; gap: 1.1rem;
+            padding-top: 0.6rem; margin-top: -0.6rem;
+        }
+        .sticky-top .tabs { margin-bottom: 0; padding-bottom: 0; }
         .tabs {
             display: flex;
             gap: 1.75rem;
@@ -280,7 +287,18 @@
             margin-bottom: 0.8rem;
         }
 
-        .email-subject { font-size: 1.02rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.35rem; }
+        .email-subject { font-size: 1.02rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.15rem; }
+        .brief { display: grid; grid-template-columns: 1fr; gap: 0.05rem 0; font-size: 0.92rem; margin: 0.2rem 0 0.6rem; line-height: 1.45; }
+        .brief-k { color: var(--text-faint); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.35rem; white-space: nowrap; }
+        .brief-v { color: var(--text-main); }
+        .brief-v.foryou-yes { color: var(--accent); font-weight: 500; }
+        .panel-fyi .brief-v.foryou-yes { color: var(--info); }
+        .convo { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.2rem 0 0.6rem; }
+        .bubble { background: var(--inset); border: 1px solid var(--border); border-radius: 0.55rem; padding: 0.4rem 0.6rem; font-size: 0.88rem; line-height: 1.45; }
+        .bubble.me { border-color: rgba(217, 119, 87, 0.5); margin-left: 1.5rem; }
+        .bubble-head { font-size: 0.76rem; color: var(--text-faint); margin-bottom: 0.1rem; }
+        .bubble-head b { color: var(--text-sub); font-weight: 600; }
+        .email-meta { font-size: 0.82rem; color: var(--text-faint); margin-bottom: 0.4rem; }
         .email-task { font-size: 0.95rem; color: var(--accent); font-weight: 500; margin-bottom: 0.5rem; }
         .panel-fyi .email-task { color: var(--info); }
 
@@ -707,6 +725,8 @@
         </div>
     </div>
 
+    <!-- Timeline and tabs stay pinned at the top while the page scrolls -->
+    <div class="sticky-top">
     <div class="card">
         <div class="tl-head">
             <div class="card-title">Today's Timeline</div>
@@ -722,14 +742,15 @@
             <div class="now-line" id="nowLine"></div>
         </div>
     </div>
-
-    <div>
         <div class="tabs">
             <div class="tab active" data-tab="inbox" onclick="switchTab('inbox')">Inbox</div>
             <div class="tab" data-tab="notes" onclick="switchTab('notes')">Running Notes</div>
             <div class="tab" data-tab="tomorrow" onclick="switchTab('tomorrow')">Tomorrow's Agenda</div>
             <div class="tab" data-tab="catchup" onclick="switchTab('catchup')">Catch-up</div>
         </div>
+    </div>
+
+    <div>
 
         <!-- TAB 1: INBOX -->
         <div id="tab-inbox" class="inbox-columns">
@@ -1463,7 +1484,20 @@
 
             // Single email: context bullets. Thread with several unread: one line per message, oldest first.
             let body;
-            if (msgs.length > 1) {
+            const conv = Array.isArray(item.Conversation) ? item.Conversation : (item.Conversation ? [item.Conversation] : []);
+            if (item.ForYou || item.Ask || item.YourMove) {
+                // Brief: is it for me, what they want, where it stands, my next step; then the conversation, oldest first
+                const row = (k, v, cls = '') => v ? `<div class="brief-k">${k}</div><div class="brief-v ${cls}">${esc(v)}</div>` : '';
+                // For you, then the conversation bubbles, then your move
+                body = `<div class="brief">${row('For you', item.ForYou, /^yes/i.test(item.ForYou || '') ? 'foryou-yes' : '')}</div>`;
+                if (conv.length) {
+                    body += '<div class="convo">' + conv.map(c => `<div class="bubble${/^you$/i.test(c.From) ? ' me' : ''}">
+                        <div class="bubble-head"><b>${esc(c.From)}</b>${c.When ? ' · ' + esc(c.When) : ''}</div>${esc(c.Said)}</div>`).join('') + '</div>';
+                } else if (item.Ask) {
+                    body += `<div class="brief">${row('The ask', item.Ask)}</div>`;
+                }
+                body += `<div class="brief">${row('Your move', item.YourMove)}${item.Deadline ? row('Due', item.Deadline) : ''}</div>`;
+            } else if (msgs.length > 1) {
                 body = '<ol class="thread-list">' + msgs.map(m => `
                     <li><span class="thread-from">${esc(m.From)}</span><span class="thread-time">${esc(fmtReceived(m.Received))}</span>
                     <div class="thread-sum">${esc(m.Summary)}</div></li>`).join('') + '</ol>';
@@ -1480,7 +1514,8 @@
 
             card.innerHTML = `
                 <div class="email-subject">${esc(item.CleanSubject || item.Subject || 'Email Thread')}${badge}</div>
-                <div class="email-task">${esc(item.ActionTask || 'Review thread')}</div>
+                <div class="email-meta">${esc(item.From || '')}${item.From && item.LatestReceived ? ' · ' : ''}${esc(fmtReceived(item.LatestReceived))}</div>
+                ${(item.ForYou || item.Ask || item.YourMove) ? '' : `<div class="email-task">${esc(item.ActionTask || 'Review thread')}</div>`}
                 ${body}
                 ${resources}
                 <div class="card-actions">
@@ -1511,7 +1546,8 @@
             if (isNaN(d)) return '';
             const today = new Date();
             const sameDay = d.toDateString() === today.toDateString();
-            return sameDay ? fmtTime(d) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + fmtTime(d);
+            const wd = d.toLocaleDateString('en-US', { weekday: 'short' });
+            return sameDay ? wd + ' ' + fmtTime(d) : wd + ', ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + fmtTime(d);
         }
 
         // Enter = Ask AI, Ctrl+Enter = Draft, Shift+Enter = new line
