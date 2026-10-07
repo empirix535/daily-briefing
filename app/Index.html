@@ -443,7 +443,11 @@
             border-radius: 0.4rem;
         }
         .todo-row:hover { background: var(--surface-2); }
-        .todo-row:hover .todo-btn { opacity: 1; }
+        .todo-row:hover .todo-btn, .todo-row:hover .todo-grip { opacity: 1; }
+        .todo-grip { opacity: 0; cursor: grab; color: var(--text-faint); font-size: 0.9rem; user-select: none; padding: 0 0.1rem; letter-spacing: -0.15em; }
+        .todo-item.dragging { opacity: 0.4; }
+        .todo-row.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+        .todo-row.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
         .todo-row input[type=checkbox] { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
         .todo-text {
             flex: 1;
@@ -1473,7 +1477,11 @@
         }
 
         // One email card (used by the Inbox tab and the Catch-up tab)
+        // The server can send a one-item list as a bare value; always treat these fields as lists
+        const asList = v => Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]);
+
         function buildCard(item) {
+            ['PlayByPlay', 'Messages', 'Links', 'Attachments', 'Ids', 'Conversation'].forEach(k => item[k] = asList(item[k]));
             const card = document.createElement('div');
             card.className = 'email-card';
             card.dataset.ids = JSON.stringify((item.Ids || []).filter(Boolean));
@@ -1714,6 +1722,17 @@
             });
         }
 
+        document.addEventListener('paste', e => {
+            if (!e.target || e.target.id !== 'newTodo') return;
+            const lines = splitPastedList((e.clipboardData || window.clipboardData).getData('text'));
+            if (lines.length < 2) return;
+            e.preventDefault();
+            lines.forEach(t => todos.push({ id: newId(), text: t, checked: false, children: [] }));
+            e.target.value = '';
+            saveNotes();
+            renderTodos();
+        });
+
         function addTodo() {
             const input = document.getElementById('newTodo');
             const text = input.value.trim();
@@ -1738,6 +1757,13 @@
             btn.disabled = true;
         }
 
+        // Multi-line paste -> one item per line. Strips "1." "-" "•" markers; drops blank lines and ALL-CAPS headings.
+        function splitPastedList(text) {
+            return text.split(/\r?\n/)
+                .map(l => l.trim().replace(/^(\(?\d+[.)]|[-*•▪◦–])\s*/, '').trim())
+                .filter(l => l && !(/[A-Z]/.test(l) && l === l.toUpperCase() && l.length < 80));
+        }
+
         function clearCompleted() {
             todos = todos.filter(t => !t.checked);
             todos.forEach(t => { if (t.children) t.children = t.children.filter(c => !c.checked); });
@@ -1760,6 +1786,7 @@
             }
         }
 
+        let dragState = null;
         function todoNode(item, parentArr, depth) {
             const wrap = document.createElement('div');
             wrap.className = 'todo-item' + (depth === 0 ? ' todo-parent' : ' todo-child');
@@ -1783,6 +1810,20 @@
             txt.value = item.text || '';
             txt.dataset.id = item.id;
             txt.onkeydown = e => { if (e.key === 'Enter') txt.blur(); };
+            txt.onpaste = e => {
+                const lines = splitPastedList((e.clipboardData || window.clipboardData).getData('text'));
+                if (lines.length < 2) return;   // single line: normal paste
+                e.preventDefault();
+                const at = parentArr.indexOf(item);
+                const before = txt.value.trim();
+                const make = t => depth === 0 ? { id: newId(), text: t, checked: false, children: [] } : { id: newId(), text: t, checked: false };
+                const items = lines.map(make);
+                if (before) parentArr.splice(at + 1, 0, ...items);   // box had text: keep it, add the list after
+                else parentArr.splice(at, 1, ...items);               // empty box: the list replaces it
+                txt.onblur = null;
+                saveNotes();
+                renderTodos();
+            };
             txt.onblur = () => {
                 const v = txt.value.trim();
                 if (!v) {
@@ -1796,6 +1837,35 @@
                 }
             };
 
+            // Drag the grip to reorder; items move within their own level (tasks among tasks, sub-tasks within their task)
+            const grip = document.createElement('span');
+            grip.className = 'todo-grip';
+            grip.textContent = '⋮⋮';
+            grip.title = 'Drag to reorder';
+            grip.draggable = true;
+            grip.ondragstart = e => { dragState = { item, arr: parentArr }; wrap.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.id); };
+            grip.ondragend = () => { wrap.classList.remove('dragging'); dragState = null; document.querySelectorAll('.drop-above,.drop-below').forEach(x => x.classList.remove('drop-above', 'drop-below')); };
+            row.ondragover = e => {
+                if (!dragState || dragState.arr !== parentArr || dragState.item === item) return;
+                e.preventDefault();
+                const below = e.offsetY > row.clientHeight / 2;
+                row.classList.toggle('drop-below', below); row.classList.toggle('drop-above', !below);
+            };
+            row.ondragleave = () => row.classList.remove('drop-above', 'drop-below');
+            row.ondrop = e => {
+                if (!dragState || dragState.arr !== parentArr || dragState.item === item) return;
+                e.preventDefault();
+                const below = row.classList.contains('drop-below');
+                const from = parentArr.indexOf(dragState.item);
+                parentArr.splice(from, 1);
+                let to = parentArr.indexOf(item) + (below ? 1 : 0);
+                parentArr.splice(to, 0, dragState.item);
+                dragState = null;
+                saveNotes();
+                renderTodos();
+            };
+
+            row.appendChild(grip);
             row.appendChild(cb);
             row.appendChild(txt);
 

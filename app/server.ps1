@@ -16,9 +16,9 @@ $Config = @{
     # Claude Code CLI (uses your claude.ai subscription login, no API key)
     ClaudeModel   = "haiku"     # haiku | sonnet | opus
     ClaudePath    = ""          # optional full path to claude.exe; auto-detected if blank
-    ClaudeTimeout = 120         # seconds
+    ClaudeTimeout = 240         # seconds (full-thread summaries can take a while)
     MaxParallel   = 4           # Claude calls run at the same time
-    TriageBatch   = 3           # conversations per Claude call on a normal refresh
+    TriageBatch   = 2           # conversations per Claude call on a normal refresh
 
     # Ollama (local, free fallback)
     OllamaUrl     = "http://localhost:11434/api/generate"
