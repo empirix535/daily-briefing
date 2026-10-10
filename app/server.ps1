@@ -1644,6 +1644,8 @@ Respond with ONLY a JSON object, no prose and no code fences:
 - Subject: short and specific, 3-8 words. No "RE:" or "FW:".
 - Body: the plain text body, following the rules below. The request itself is the instruction.
 - If they refer to something from the earlier conversation ("what we just found"), use those facts. Do not invent anything else.
+- If they did not say what the email is about, still return the JSON: fill To/Cc and leave Subject and Body empty, so the window opens for them to write it.
+- Always return the JSON object, never a question or prose.
 
 $DraftRules
 
@@ -1653,7 +1655,15 @@ $HistoryText
 Request: $Question
 "@
             $d = $null
-            try { $d = ConvertFrom-LLMJson (Invoke-LLM $composePrompt $true $model) | Select-Object -First 1 } catch { throw "Claude did not draft the email: $($_.Exception.Message)" }
+            $rawText = ""
+            try { $rawText = Invoke-LLM $composePrompt $true $model } catch { throw "Claude did not draft the email: $($_.Exception.Message)" }
+            try { $d = ConvertFrom-LLMJson $rawText | Select-Object -First 1 } catch {}
+            if (-not $d) {
+                # Claude answered in prose (usually asking what the email should say): show that instead of an error
+                $state.Result = @{ Answer = [string]$rawText; Sources = @(); Searched = ""; Choices = @() }
+                $state.Status = "done"
+                return
+            }
             $body = ([string]$d.Body -replace '(?s)^\s*```\w*\s*', '' -replace '(?s)\s*```\s*$', '').Trim()
 
             $state.Stage = "Opening the draft in Outlook"
