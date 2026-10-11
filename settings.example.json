@@ -18,6 +18,13 @@
     "AskAboutInvites": true,
     "InviteDays": 7,
 
+    "_help_assistant": "The assistant watches your Teams notes-to-self chat through its own minimized Chrome window, posts reminders there, and answers your messages. Active hours govern repeat nudges and (later) email alerts.",
+    "SecretaryEnabled": true,
+    "SecretaryModel": "haiku",
+    "SecretaryDays": [ "Mon", "Tue", "Wed", "Thu", "Fri" ],
+    "SecretaryStart": "08:00",
+    "SecretaryEnd": "18:00",
+
     "_help_other": "CloseOutlookOnExit quits Outlook when you close the dashboard (never while a draft window is open). Port only needs changing if 8000 is taken.",
     "CloseOutlookOnExit": true,
     "Port": 8000

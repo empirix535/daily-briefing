@@ -17,6 +17,7 @@ $Config = @{
     ClaudeModel   = "haiku"     # haiku | sonnet | opus
     ClaudePath    = ""          # optional full path to claude.exe; auto-detected if blank
     ClaudeTimeout = 240         # seconds (full-thread summaries can take a while)
+    ClaudeLean    = $true       # no tools/MCP and a short system prompt on every call (set false to use Claude Code's defaults)
     MaxParallel   = 4           # Claude calls run at the same time
     TriageBatch   = 2           # conversations per Claude call on a normal refresh
 
@@ -49,6 +50,23 @@ $Config = @{
     # Meeting invites and live updates
     AskAboutInvites      = $true    # show unanswered invites in the dashboard with Open / Dismiss buttons
     InviteDays           = 7        # look this many days ahead
+
+    # Assistant (Teams notes-to-self chat): reminders and answers. Reads and posts through a dedicated Chrome window.
+    SecretaryEnabled        = $true
+    SecretaryModel          = "haiku"   # model for quick chat answers and reminders
+    SecretaryWebModel       = "haiku"   # model for news questions (web search)
+    SecretaryThinkModel     = "sonnet"  # model for meeting briefs (and later, questions and game plans)
+    SecretaryAutoBrief      = $false    # post today's meeting brief automatically at SecretaryBriefTime (or type "morning")
+    SecretaryBriefTime      = "08:30"
+    SecretaryEveningTime    = "16:00"   # day-before check on important meetings
+    SecretaryNotesFolder    = "Notes"   # cleaned-up notes go to OneDrive\<this folder> as .txt
+    SecretaryPollSec        = 30        # how often the self-chat is checked (free, no Claude call)
+    SecretaryDebugPort      = 9222
+    SecretaryChromePath     = ""        # auto-detected if blank
+    SecretaryDays           = @("Mon", "Tue", "Wed", "Thu", "Fri")
+    SecretaryStart          = "08:00"   # active hours: repeat nudges and (later) email alerts
+    SecretaryEnd            = "18:00"
+    SecretaryMaxCallsPerDay = 150       # Claude calls for chat answers
 
     Port                = 8000
     CloseOutlookOnExit  = $true # quit Outlook when the dashboard closes (skipped if a compose/read window is open)
@@ -150,6 +168,10 @@ $Helpers = {
 
         # Prompt goes through stdin. Tool use is blocked so email content cannot trigger actions.
         $cliArgs = "-p --output-format json --model $Model --disallowedTools Bash Edit Write NotebookEdit WebFetch WebSearch"
+        if ($Config.ClaudeLean -ne $false) {
+            # Lean call: no tools, no MCP servers, short system prompt. Cuts the per-call overhead (Claude Code's own prompt and tool list) by most of it.
+            $cliArgs = "-p --output-format json --model $Model --tools `"`" --strict-mcp-config --system-prompt `"You are a careful assistant inside a local email dashboard. Follow the instructions in the user message exactly.`""
+        }
 
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         if ($exe -like "*.exe") {
@@ -169,6 +191,7 @@ $Helpers = {
         $psi.WorkingDirectory       = $ClaudeWorkDir
         # Force subscription (OAuth) auth. A stray API key would switch the CLI to paid API billing.
         [void]$psi.EnvironmentVariables.Remove("ANTHROPIC_API_KEY")
+        if ($Config.ClaudeLean -ne $false) { $psi.EnvironmentVariables["ENABLE_CLAUDEAI_MCP_SERVERS"] = "false" }
 
         $proc    = [System.Diagnostics.Process]::Start($psi)
         $outTask = $proc.StandardOutput.ReadToEndAsync()
@@ -297,6 +320,15 @@ $Helpers = {
         if ($obj -isnot [array] -and $obj.threads) { return @($obj.threads) }
     if ($obj -isnot [array] -and $obj.emails) { return @($obj.emails) }
         return @($obj)
+    }
+
+    # Explicit date list for prompts, so the model never has to work out weekdays itself
+    function Get-DateTable([int]$Days = 21) {
+        $d = (Get-Date).Date; $ci = [System.Globalization.CultureInfo]::InvariantCulture
+        return ((0..$Days | ForEach-Object {
+            $x = $d.AddDays($_)
+            "{0} = {1}{2}" -f $x.ToString('ddd MMM d', $ci), $x.ToString('yyyy-MM-dd'), $(if ($_ -eq 0) { ' (today)' } elseif ($_ -eq 1) { ' (tomorrow)' } else { '' })
+        }) -join "`n")
     }
 
     function Get-CalendarItems($Mapi, [datetime]$Day) {
@@ -954,7 +986,8 @@ $(ConvertTo-Json -InputObject $llmInput -Depth 6)
             $first = $items.GetFirst()
             if ($first) { $newest = [string]$first.EntryID }
         } catch {}
-        return @{ Mail = $newest; Invites = (Get-PendingInvites $Mapi) }
+        $todo = ""; try { if (Test-Path $TodoPath) { $todo = [string](Get-Item $TodoPath).LastWriteTimeUtc.Ticks } } catch {}
+        return @{ Mail = $newest; Invites = (Get-PendingInvites $Mapi); Todo = $todo }
     }
 
     function Get-CalendarRange($Mapi, [datetime]$From, [datetime]$To) {
@@ -1139,6 +1172,19 @@ I'll send the revised power analysis by Friday.
 $($Config.SignOff)
 $($Config.SignName)
 "@
+
+    # data\drafting-rules.md (if present) replaces the built-in rules above. Read on every draft, so edits apply right away.
+    $DraftRulesPath = Join-Path $Root "drafting-rules.md"
+    function Get-DraftRules {
+        if (Test-Path $DraftRulesPath) {
+            try {
+                $t = [System.IO.File]::ReadAllText($DraftRulesPath)
+                $t = (($t -split "`r?`n") | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+                return $t.Replace('{SignOff}', [string]$Config.SignOff).Replace('{SignName}', [string]$Config.SignName).Trim()
+            } catch {}
+        }
+        return $DraftRules
+    }
 
     # Connect to Outlook, retrying while it is still starting up (for example right after signing in)
     function Connect-Outlook([int]$Tries = 6) {
@@ -1509,6 +1555,8 @@ $AssistantJob = {
         $state.Stage = "Understanding your question"
         $planPrompt = @"
 Today is $today. Decide what $($Config.UserName) wants, then fill in the plan.
+Use this date list; do not work out weekdays yourself:
+$(Get-DateTable)
 Respond with ONLY a JSON object, no prose and no code fences:
 {"Intent":"search","People":[],"Keywords":[],"From":"","To":""}
 
@@ -1549,6 +1597,8 @@ Question: $Question
             $nowText = (Get-Date).ToString("dddd, yyyy-MM-dd HH:mm")
             $calPrompt = @"
 Now is $nowText (local time). Turn $($Config.UserName)'s calendar request into a plan.
+Use this date list for every date; do not work out weekdays yourself. A weekday name alone ("Friday") means its next date in this list:
+$(Get-DateTable)
 Respond with ONLY a JSON object, no prose and no code fences:
 {"Action":"new","Subject":"","Start":"","DurationMinutes":30,"Attendees":[],"Optional":[],"Location":"","Agenda":"","Find":{"From":"","To":"","Time":"","People":[],"Keywords":[]},"Targets":[],"All":false,"NewStart":"","Scope":"occurrence","Message":"","Free":{"People":[],"From":"","To":"","DurationMinutes":30,"DayStart":"09:00","DayEnd":"17:00"}}
 
@@ -1647,7 +1697,7 @@ Respond with ONLY a JSON object, no prose and no code fences:
 - If they did not say what the email is about, still return the JSON: fill To/Cc and leave Subject and Body empty, so the window opens for them to write it.
 - Always return the JSON object, never a question or prose.
 
-$DraftRules
+$(Get-DraftRules)
 
 Earlier conversation:
 $HistoryText
@@ -2224,7 +2274,7 @@ $origBody
 User Instruction:
 $($reqBody.Prompt)
 
-$DraftRules
+$(Get-DraftRules)
 
 Output ONLY the plain text body for the draft. No preamble, no subject line, no code fences, no commentary.
 "@
@@ -2325,6 +2375,23 @@ $ps = [powershell]::Create()
 $ps.Runspace = $rs
 [void]$ps.AddScript($ServerLoop)
 $handle = $ps.BeginInvoke()
+
+# Assistant: its own background thread (app\secretary.ps1)
+$secHandle = $null
+if ($Config.SecretaryEnabled) {
+    $secPath = Join-Path $AppDir "secretary.ps1"
+    if (Test-Path $secPath) {
+        $srs = [runspacefactory]::CreateRunspace()
+        $srs.ApartmentState = "STA"        # Outlook windows opened from here need an STA thread
+        $srs.ThreadOptions  = "ReuseThread"
+        $srs.Open()
+        $srs.SessionStateProxy.SetVariable("sync", $sync)
+        $sps = [powershell]::Create()
+        $sps.Runspace = $srs
+        [void]$sps.AddScript([System.IO.File]::ReadAllText($secPath))
+        $secHandle = $sps.BeginInvoke()
+    } else { Write-Log "secretary.ps1 not found. Assistant is off." "WARN" }
+}
 
 # Tray icon
 $notify = New-Object System.Windows.Forms.NotifyIcon
@@ -2439,6 +2506,11 @@ $miStartup.add_Click({
     $miStartup.Checked = Test-Path $StartupLnk
 })
 [void]$menu.Items.Add($miStartup)
+$miPause = New-Object System.Windows.Forms.ToolStripMenuItem("Pause assistant")
+$miPause.add_Click({ $sync.SecretaryPauseToggle = $true })
+$miShowTeams = New-Object System.Windows.Forms.ToolStripMenuItem("Show Teams window")
+$miShowTeams.add_Click({ $sync.SecretaryShowWindow = -not [bool]$sync.SecretaryShowWindow; $miShowTeams.Checked = [bool]$sync.SecretaryShowWindow })
+if ($Config.SecretaryEnabled) { [void]$menu.Items.Add($miPause); [void]$menu.Items.Add($miShowTeams) }
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 $miRestart = $menu.Items.Add("Restart Server")
 $miRestart.add_Click({ Stop-Server "Restart requested from tray" $false $true })
@@ -2470,11 +2542,28 @@ $timer.add_Tick({
         return
     }
 
+    # Assistant: tray status, alerts, and crash check
+    if ($Config.SecretaryEnabled) {
+        $miPause.Checked = [bool]$sync.SecretaryPaused
+        if ($sync.SecretaryAlert -and $sync.SecretaryAlert -ne $script:LastSecAlert) {
+            $script:LastSecAlert = $sync.SecretaryAlert
+            $notify.ShowBalloonTip(8000, "Daily Briefing assistant", $sync.SecretaryAlert, [System.Windows.Forms.ToolTipIcon]::Warning)
+        } elseif (-not $sync.SecretaryAlert) { $script:LastSecAlert = $null }
+        if ($secHandle -and $secHandle.IsCompleted -and -not $script:SecCrashSeen) {
+            $script:SecCrashSeen = $true
+            Write-Log "Assistant thread stopped unexpectedly. $(($sps.Streams.Error | Out-String).Trim())" "ERROR"
+            $notify.ShowBalloonTip(8000, "Daily Briefing assistant", "The assistant stopped. Right-click the tray icon and choose Restart Server.", [System.Windows.Forms.ToolTipIcon]::Error)
+        }
+    }
+
+    # With the assistant on, closing the dashboard keeps the server (and Outlook) running
     if ($sync.CloseAt -and $now -gt $sync.CloseAt) {
+        if ($Config.SecretaryEnabled) { $sync.CloseAt = $null; $sync.EverConnected = $false; Write-Log "Dashboard closed. Server stays on for the assistant."; return }
         Stop-Server "Dashboard window closed" $true
         return
     }
     if ($sync.EverConnected -and -not $sync.Busy -and ($now - $sync.LastHeartbeat).TotalSeconds -gt $Config.HeartbeatTimeoutSec) {
+        if ($Config.SecretaryEnabled) { $sync.EverConnected = $false; Write-Log "Dashboard stopped checking in. Server stays on for the assistant."; return }
         Stop-Server "Dashboard stopped responding for $($Config.HeartbeatTimeoutSec)s" $true
     }
 })

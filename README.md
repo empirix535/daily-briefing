@@ -23,6 +23,25 @@ Everything runs on your own PC. The AI is Claude, used through the Claude Code c
 
 ![Inbox assistant](docs/screenshots/assistant.png)
 
+## Assistant in Teams
+
+The assistant lives in your Teams notes-to-self chat. It posts reminders there and answers your messages. Its messages start with a robot emoji. It never messages anyone else, sends email, or acts for you.
+
+- It reads and posts through its own minimized Chrome window (Teams web, separate profile). Sign in to Teams in that window once. Leave it minimized; closing it is fine, the assistant reopens it.
+- Checking the chat is free. Claude is called only when you write something it has to answer.
+- Commands: `done`, `snooze 30m`, `reminders`, `delete reminder 3`, `pause`, `resume`, `help`. Anything else goes to Claude, for example "remind me every weekday at 9 to do the morning check".
+- Its rules and tone live in `data\secretary\rules.md` and `data\secretary\voice.md`. Edit them freely.
+- **Pause assistant** in the tray menu stops reminders. With the assistant on, closing the dashboard leaves the server running in the tray.
+
+## Moving to a new PC (or after reinstalling Windows)
+
+Your code is on GitHub, your notes are in OneDrive, and the assistant copies your personal data (settings, running notes, reminders, rules, drafting rules) to `OneDrive\Daily Briefing backup` once a day, with two weeks of dated copies in `history`.
+
+1. Sign in to OneDrive and let it finish syncing.
+2. Install classic Outlook, Chrome, and Claude Code (`irm https://claude.ai/install.ps1 | iex`, then run `claude` once to sign in).
+3. Clone or download the repository, then run **Install.cmd**. It finds the backup, offers to restore it, and offers Start with Windows.
+4. The first time the assistant starts, it shows its Teams window: sign in to Teams there once and it hides again.
+
 ## Requirements
 
 - Windows 10 or 11

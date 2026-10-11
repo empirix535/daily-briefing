@@ -44,7 +44,20 @@ foreach ($f in "server.ps1", "Index.html", "launch_dashboard.vbs", "agenda.ico",
     }
 }
 
-# 3. Personal settings
+# 3. Restore personal data from the OneDrive backup (new PC or reinstall)
+$od = @($env:OneDriveCommercial, $env:OneDrive) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+$backup = if ($od) { Join-Path $od "Daily Briefing backup\latest" } else { $null }
+if ($backup -and (Test-Path $backup) -and -not (Test-Path (Join-Path $Data "todo.json"))) {
+    Step "Backup found in OneDrive"
+    Write-Host "  $backup"
+    $r = Read-Host "  Restore your settings, running notes, reminders, and rules from it? (Y/n)"
+    if ($r -notmatch '^[nN]') {
+        Copy-Item (Join-Path $backup "*") $Base -Recurse -Force
+        Ok "Restored. Older daily copies are in the backup's history folder."
+    }
+}
+
+# 4. Personal settings
 $settings = Join-Path $Base "settings.json"
 if (-not (Test-Path $settings)) {
     Step "Your settings (saved in settings.json; edit it any time)"
@@ -59,7 +72,7 @@ if (-not (Test-Path $settings)) {
     Ok "Saved settings.json"
 } else { Step "Settings"; Ok "Using existing settings.json" }
 
-# 4. Requirements
+# 5. Requirements
 Step "Checking requirements"
 if (Test-Path "Registry::HKEY_CLASSES_ROOT\Outlook.Application") { Ok "Classic Outlook found" }
 else { Warn "Classic Outlook not found. The new Outlook for Windows is not supported." }
@@ -86,7 +99,7 @@ if ($env:ANTHROPIC_API_KEY -or [Environment]::GetEnvironmentVariable("ANTHROPIC_
     Warn "ANTHROPIC_API_KEY is set. The dashboard ignores it and uses your Claude subscription login."
 }
 
-# 5. Build DailyBriefing.exe with the C# compiler included in Windows
+# 6. Build DailyBriefing.exe with the C# compiler included in Windows
 Step "Building DailyBriefing.exe"
 $csc = @("$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe", "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 $useExe = $false
@@ -97,7 +110,7 @@ if ($csc) {
 }
 if (-not $useExe) { Warn "Could not build the .exe. Shortcuts will use app\launch.vbs instead." }
 
-# 6. Shortcuts
+# 7. Shortcuts
 Step "Creating shortcuts"
 $wsh = New-Object -ComObject WScript.Shell
 function New-Shortcut([string]$Path, [string]$Arguments = "") {
@@ -122,10 +135,22 @@ try { & "$env:WINDIR\System32\ie4uinit.exe" -show; Ok "Refreshed Windows' icon c
 
 $startup = Join-Path ([Environment]::GetFolderPath("Startup")) "Daily Briefing.lnk"
 if (Test-Path $startup) { Ok "Start with Windows is on (turn it off from the tray menu)" }
+else {
+    # The assistant only works while the server runs, so offer to start it at sign-in
+    $sw = Read-Host "  Start Daily Briefing (and the Teams assistant) when you sign in to Windows? (Y/n)"
+    if ($sw -notmatch '^[nN]') {
+        $l = $wsh.CreateShortcut($startup)
+        if ($useExe) { $l.TargetPath = $Exe; $l.Arguments = "--background" }
+        else { $l.TargetPath = "wscript.exe"; $l.Arguments = "`"$(Join-Path $App 'launch.vbs')`" /background" }
+        $l.WorkingDirectory = $Base; $l.IconLocation = "$Icon,0"; $l.Description = "Daily Briefing (starts in the background)"; $l.Save()
+        Ok "Start with Windows is on"
+    }
+}
 
-# 7. Done
+# 8. Done
 Step "Done"
 Write-Host "  To pin it: open Start, right-click Daily Briefing, choose Pin to taskbar."
+Write-Host "  The Teams assistant opens its own hidden Chrome window. The first time, it shows the window so you can sign in to Teams."
 $go = Read-Host "  Open Daily Briefing now? (Y/n)"
 if ($go -notmatch '^[nN]') {
     if ($useExe) { Start-Process $Exe } else { Start-Process wscript.exe "`"$(Join-Path $App 'launch.vbs')`"" }

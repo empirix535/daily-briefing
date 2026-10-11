@@ -2117,6 +2117,7 @@
         // Live updates: every 90 seconds, a cheap check (no AI) for new mail and new invites.
         // New mail refreshes the dashboard after 60 quiet seconds, so a burst of email means one refresh.
         // New invites only show a prompt here; nothing opens until you click Open.
+        let lastTodo = null;
         async function checkChanges() {
             try {
                 const r = await (await fetch('http://localhost:8000/api/changes', { cache: 'no-store' })).json();
@@ -2124,6 +2125,9 @@
                 renderInvites(r.changes.Invites);
                 if (lastMail !== null && r.changes.Mail && r.changes.Mail !== lastMail) refreshDue = Date.now() + 60000;
                 lastMail = r.changes.Mail;
+                // The assistant can add items to Running Notes: reload them when todo.json changes (not while typing)
+                if (lastTodo !== null && r.changes.Todo && r.changes.Todo !== lastTodo && !userBusy()) loadNotes();
+                if (r.changes.Todo) lastTodo = r.changes.Todo;
             } catch (e) {}
         }
         setInterval(checkChanges, 90000);
