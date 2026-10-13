@@ -154,10 +154,12 @@ function Send-MailAlert($Need, [string]$Head) {
     Send-Chat ($Head + "`n" + ($lines -join "`n") + "`n" + $(if ($n -gt 1) { "Ask what 1 wants, or for a play by play on 2." } else { "Ask what 1 wants, or for a play by play." }))
 }
 
-# Wall-clock scan: :00, :15, :30, :45 during working hours. Each slot is tried once; a failed slot retries at the next.
+# Wall-clock scan for the slots :00, :15, :30, :45 during working hours. The scan starts one minute early (:14, :29, :44, :59)
+# so the result lands on the slot. Each slot is tried once; a failed slot retries at the next.
 function Invoke-MailWatch([datetime]$Now) {
-    if (-not (Test-ActiveHours $Now)) { return }
-    $slot = $Now.ToString('yyyy-MM-dd HH:', $Inv) + (15 * [int][math]::Floor($Now.Minute / 15)).ToString('00')
+    $t = $Now.AddMinutes(1)   # the slot this scan is for
+    if (-not (Test-ActiveHours $t)) { return }
+    $slot = $t.ToString('yyyy-MM-dd HH:', $Inv) + (15 * [int][math]::Floor($t.Minute / 15)).ToString('00')
     if ($state.ScanSlot -eq $slot) { return }
     $state.ScanSlot = $slot; Save-State
     $mode = 'normal'

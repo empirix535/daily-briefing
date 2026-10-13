@@ -204,14 +204,14 @@ $script:Out.Clear(); [void](Invoke-MailScan $now 'normal')
 Check "a write scope in the grant triggers a warning" ((@($script:Out) -join ' ') -match 'write scopes \(Mail.ReadWrite\)') (@($script:Out) -join ' ')
 
 # Wall-clock slots
-$mon = [datetime]'2026-10-12 10:07'
+$mon = [datetime]'2026-10-12 10:14'
 $state.GreetDay = "2026-10-12"; $state.LastScan = '2026-10-12T09:50:00'; $state.ScanSlot = ""
 $script:ClaudeQueue.Enqueue((Json @{ health = @{ ok = $true; error = ""; scopes = @("Mail.Read") }; threads = @(); meetings = @() }))
 $script:Prompts.Clear(); Invoke-MailWatch $mon
-Check "watch runs a scan in the 10:00 slot" ($script:Prompts.Count -eq 1 -and $state.ScanSlot -eq '2026-10-12 10:00') $state.ScanSlot
-Invoke-MailWatch ([datetime]'2026-10-12 10:14')
+Check "watch starts at 10:14 for the 10:15 slot" ($script:Prompts.Count -eq 1 -and $state.ScanSlot -eq '2026-10-12 10:15') $state.ScanSlot
+Invoke-MailWatch ([datetime]'2026-10-12 10:14:40')
 Check "same slot does not scan twice" ($script:Prompts.Count -eq 1) ""
-Invoke-MailWatch ([datetime]'2026-10-12 19:00'); Invoke-MailWatch ([datetime]'2026-10-17 10:00')
+Invoke-MailWatch ([datetime]'2026-10-12 17:59'); Invoke-MailWatch ([datetime]'2026-10-12 19:00'); Invoke-MailWatch ([datetime]'2026-10-17 10:00')
 Check "no scan after hours or on weekends" ($script:Prompts.Count -eq 1) ""
 
 # Questions about email, numbered from the latest alert
