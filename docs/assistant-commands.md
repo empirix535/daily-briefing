@@ -1,17 +1,7 @@
 # Assistant commands
 
-Type `commands` in your Teams self-chat to get this list.
+Type `help` in your Teams self-chat. The list is generated from the command table in `app\assistant\commands.ps1`, so it always matches what the assistant does.
 
-```text
-COMMANDS: morning | tomorrow | reminders | done | snooze 30m | delete reminder 3 | todo: X | todos | note: X | start notes / end notes | pause | resume | 1-9 to pick | yes / no
+Anything that is not a command goes to Claude, so you can also just say it: add X to my to-dos due Friday, remind me Thursday at 2 to ..., what does 1 want exactly, when am I free Thursday, schedule a check-in with Sophie Tuesday at 10.
 
-REMINDERS: remind me Thu at 2 to ... | every weekday at 9 ... | Mon, Wed, Fri at 3:20 with the exact text "..." | ...until I say done | ...only if X is on my calendar (COB = 5 PM)
-
-TO-DOS: add to my to-dos: X, under [project] | mark X done
-
-EMAIL: email Caitlin asking ... | reply to Caitlin on the BRAC thread: ... | reply all to the X thread: ... | forward Nathalie's email about X to Rachel (cc Carina) | "informal" = short, "in French" = language
-
-CALENDAR: block 5-6 today for the gym | move the dentist block to Fri 9:30 | set up 30 min with Caitlin next week | move my 3 PM to Fri 10 | cancel my 4:30
-
-ASK: what did Nathalie say about X? | did something happen in Lebanon today?
-```
+The assistant reads email and calendar through the Microsoft 365 connector (read-only). It never sends, drafts, or changes anything in Outlook. For a calendar event it posts a pre-filled Outlook on the web link that you edit and send yourself.

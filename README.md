@@ -2,128 +2,95 @@
 
 # Daily Briefing
 
-A local Windows dashboard for classic Outlook. It shows today's meetings on a timeline, sorts your unread email into what needs a reply and what is FYI, drafts replies in your style, answers questions about past threads, and gives you a full rundown after time away.
+A local Windows app with two parts. The **assistant** lives in your Teams notes-to-self chat. It watches your inbox and calendar, posts alerts, reminders, and briefs, and answers your messages. The **dashboard** is a browser window with a To-do tab, a Notes tab with an embedded Claude editor, and a Streams tab for tracking papers and projects.
 
-Everything runs on your own PC. The AI is Claude, used through the Claude Code command-line tool and your own Claude subscription, so there is no API key and no separate billing.
+Everything runs on your own PC. The AI is Claude, used through the Claude Code command-line tool and your own Claude subscription, so there is no API key and no separate billing. Mail and calendar are read through the Microsoft 365 connector in your Claude account. The assistant never sends email, never changes your calendar, and never messages anyone but you.
 
-![Inbox view](docs/screenshots/inbox.png)
+## What it does
 
-## Features
-
-- **Timeline.** Today's meetings on a single time axis from 8 AM to 6 PM. Overlapping meetings stack in their own rows. Past meetings fade, the current one glows, and a status line shows what is on now or next.
-- **Triaged inbox.** Unread conversations, newest first, grouped by thread and summarized: **Requires Response** or **FYI**. Newsletters, marketing, and routine notices go to a collapsed **Filtered out** list. Journal decisions, revision requests, and reviewer invitations are always kept.
-- **Links and attachments.** Shared documents (SharePoint, OneDrive, Google Docs and Drive, Teams, Zoom, and more) and real file attachments appear as one-click chips. Logos and signature images are skipped. Duplicates are merged.
-- **Reply drafting.** Type an instruction and press Ctrl+Enter. A Reply All window opens in Outlook with a short, direct draft above the quoted thread. Nothing is ever sent for you.
-- **Ask AI about a thread.** Press Enter to ask a question about a specific email thread.
-- **Inbox assistant.** A chat box (Ctrl+K) that searches your Inbox, its subfolders, and Sent Items and answers with cited sources. It can also open a new email draft ("Email Sam asking for the report by Friday"), set up, move, or cancel meetings ("Cancel my 3 PM with Jordan tomorrow"), and find times when colleagues are free. Everything opens in Outlook for you to review and send.
-- **Catch-up.** After two or more missed workdays, a banner offers a full rundown: what needs you now, deadlines, what happened by project, what was resolved without you, and the meetings you missed.
-- **Running notes** with nested checklists, and **tomorrow's agenda**.
-- **Clear** marks a whole conversation as read in Outlook.
-- **Tray app.** Runs quietly in the system tray, can start with Windows, and shuts down (with Outlook) when you close the dashboard.
-
-![Inbox assistant](docs/screenshots/assistant.png)
-
-## Assistant in Teams
-
-The assistant lives in your Teams notes-to-self chat. It posts reminders there and answers your messages. Its messages start with a robot emoji. It never messages anyone else, sends email, or acts for you.
-
-- It reads and posts through its own minimized Chrome window (Teams web, separate profile). Sign in to Teams in that window once. Leave it minimized; closing it is fine, the assistant reopens it.
-- Checking the chat is free. Claude is called only when you write something it has to answer.
-- Commands: `done`, `snooze 30m`, `reminders`, `delete reminder 3`, `pause`, `resume`, `help`. Anything else goes to Claude, for example "remind me every weekday at 9 to do the morning check".
-- Its rules and tone live in `data\secretary\rules.md` and `data\secretary\voice.md`. Edit them freely.
-- **Pause assistant** in the tray menu stops reminders. With the assistant on, closing the dashboard leaves the server running in the tray.
-
-## Moving to a new PC (or after reinstalling Windows)
-
-Your code is on GitHub, your notes are in OneDrive, and the assistant copies your personal data (settings, running notes, reminders, rules, drafting rules) to `OneDrive\Daily Briefing backup` once a day, with two weeks of dated copies in `history`.
-
-1. Sign in to OneDrive and let it finish syncing.
-2. Install classic Outlook, Chrome, and Claude Code (`irm https://claude.ai/install.ps1 | iex`, then run `claude` once to sign in).
-3. Clone or download the repository, then run **Install.cmd**. It finds the backup, offers to restore it, and offers Start with Windows.
-4. The first time the assistant starts, it shows its Teams window: sign in to Teams there once and it hides again.
+- **Mail.** Scans new inbox mail at :00, :15, :30, and :45 during working hours and posts the items that need you as a numbered list. Ask about an item by number ("what does 1 want", "make a todo from 1 by friday"). FYI items arrive in two batches a day.
+- **Calendar.** A morning brief with the day's meetings and to-dos, a prep prompt 20 to 30 minutes before meetings with other attendees, and event requests that return a pre-filled Outlook-on-the-web link. You review and press Save or Send yourself.
+- **To-do.** Add, check off, delete, and date items from chat or the dashboard. Items made from email keep an Open email button.
+- **Notes.** One page per topic. The assistant files quick notes and meeting notes here. The Ask Claude panel edits the selection in place, with undo, or brainstorms about the page. Each applied edit backs up the previous page to `data\notes\_removed`.
+- **Streams.** Pipeline tracker for papers and projects, with stage, due date, next action, and a clickable court badge for who holds the ball.
+- **Reminders and commands.** Type `help` in the self-chat for the full list.
 
 ## Requirements
 
-- Windows 10 or 11
-- **Classic Outlook** for Windows. The new Outlook for Windows does not support the scripting interface this app uses.
+- Windows 10 or 11 and PowerShell 5.1 (included in Windows)
 - Google Chrome or Microsoft Edge
-- **Claude Code**, signed in with a Claude account whose plan includes Claude Code
-- Permission to run PowerShell scripts (most setups allow this; some IT policies block it)
+- **Claude Code**, signed in with a Claude account whose plan includes it
+- The **Microsoft 365 connector** enabled in that Claude account (claude.ai, Settings, Connectors). Read access is enough.
+- Teams access to your own self-chat
+
+Outlook the desktop app is not needed. Classic and new Outlook both work, because the app never touches them.
 
 ## Install
 
-1. Download this repository (green **Code** button, then **Download ZIP**) and unzip it somewhere permanent, for example `C:\Users\you\daily-briefing`.
-2. Install Claude Code if you do not have it. In PowerShell:
+1. Install Claude Code in PowerShell, then run `claude` once to sign in and type `/exit`:
    ```powershell
    irm https://claude.ai/install.ps1 | iex
    claude
    ```
-   Sign in with your Claude account when it asks, then type `/exit`.
-3. Double-click **Install.cmd**. It will:
-   - ask for your name, a one-line description, and your organization's email domain (saved in `settings.json`)
-   - check for classic Outlook, Chrome or Edge, and Claude Code
-   - build `DailyBriefing.exe` with the C# compiler that ships with Windows
-   - add Start menu and desktop shortcuts (to start it automatically at sign-in, use **Start with Windows** in the tray menu)
-4. Open **Daily Briefing** from the Start menu. To pin it, right-click it in Start and choose **Pin to taskbar**.
+2. Clone or download this repository to a permanent folder, for example `C:\Users\you\daily-briefing`.
+3. Double-click **Install.cmd**. It asks for your name, a one-line description, your work email, and your organization's email domain, then builds `DailyBriefing.exe`, adds Start menu and desktop shortcuts, and offers to start with Windows. It is safe to run again after an update.
+4. Open **Daily Briefing**. The assistant opens its own Chrome window for Teams. Sign in once and it hides again.
 
-Run **Install.cmd** again any time after updating the files. It is safe to repeat. **Uninstall.cmd** removes the shortcuts and the .exe and keeps your data.
+## Moving to a new PC
 
-## Everyday use
+Your code is on GitHub. The assistant copies your personal data to `OneDrive\Daily Briefing backup` once a day, with two weeks of dated copies in `history`. That covers `settings.json`, to-dos, notes, reminders, rules, voice, and assistant state.
 
-| Where | What |
-|---|---|
-| Email card | **Take action** opens the instruction box. **Enter** asks AI about the thread, **Ctrl+Enter** drafts a Reply All, **Shift+Enter** adds a new line. |
-| Email card | **Open in Outlook**, **Clear** (marks the conversation read), attachment and link chips |
-| Anywhere | **Ctrl+K** opens the inbox assistant. **Esc** closes it. |
-| Tray icon | Double-click opens the dashboard. Right-click: Open Dashboard, View Log, Start with Windows, Restart Server, Exit. |
+1. Sign in to OneDrive and let it finish syncing.
+2. Install Chrome and Claude Code, sign in to Claude, and confirm the Microsoft 365 connector is on.
+3. Clone this repository and run **Install.cmd**. It finds the backup and offers to restore it.
+4. Sign in to Teams once in the assistant's window.
 
-Draft instructions starting with **informal** give a short message with no greeting or sign-off. Anything else is formal and ends with your sign-off.
-
-The dashboard refreshes every 15 minutes. Summaries are cached, so a refresh only sends new or changed threads to Claude.
+The Streams tab reads `streams.json` from OneDrive (`<OneDrive>\root\_admin\streams.json` by default). Set `StreamsPath` in `settings.json` to use another location.
 
 ## Settings
 
-Your personal settings live in `settings.json` (created by the installer; see `settings.example.json`):
+Personal values live in `settings.json` (see `settings.example.json`). Restart the server from the tray menu after changing it.
 
 | Setting | Meaning |
 |---|---|
-| `UserName`, `SignName`, `SignOff` | How drafts address and sign for you |
-| `UserDescription` | One line of context for the AI, such as your role and organization |
-| `Contacts` | Nicknames for the chat assistant, such as `"rachel": "rhatch@example.org"` |
-| `InternalDomains` | Your organization's email domains. Mail from these senders is never pre-filtered. |
-| `ClaudeModel`, `AssistantModel`, `CatchupModel` | `haiku` (fastest), `sonnet` (better answers), or `opus` |
-| `AskAboutInvites`, `InviteDays` | Show meeting invites you haven't answered (next 7 days by default) at the top of the dashboard, with Open and Dismiss buttons |
-| `CloseOutlookOnExit` | Quit Outlook when the dashboard closes (never while a draft window is open) |
+| `UserName`, `UserDescription`, `UserEmail` | How the assistant addresses you and gives Claude context |
+| `Contacts` | Nicknames, such as `"sam": "sam@example.org"` |
+| `SecretaryModel` | Model for chat answers (`haiku` is fastest) |
+| `SecretaryThinkModel` | Model for scans, note clean-up, and the Notes editor (`sonnet`) |
+| `SecretaryDays`, `SecretaryStart`, `SecretaryEnd` | Working hours for scans, nudges, and alerts |
+| `SecretaryMaxCallsPerDay` | Daily cap on assistant Claude calls (250) |
+| `StreamsPath` | Full path to `streams.json` |
 | `Port` | Local port, 8000 by default |
 
-Restart from the tray menu after changing settings. Advanced options (batch sizes, timeouts, filters) are at the top of `app/server.ps1`.
+## Everyday use
+
+The tray icon runs the app. Double-click opens the dashboard. Right-click offers Open Dashboard, View Log, Pause assistant, Start with Windows, Restart Server, and Exit. Restart the server after changing any `.ps1` file. Edits to `Index.html` need only a browser refresh.
 
 ## Privacy
 
-- The app only listens on `localhost`. Nothing is exposed to your network.
-- Email text is sent to Claude through your own Claude account when threads are summarized, drafted, searched, or caught up on. Check that this fits your organization's data policy.
-- Your notes, summary cache, catch-up results, and logs stay in `data\`, and `settings.json` holds your personal details. Both are excluded from Git by `.gitignore`.
-- Drafts are never sent automatically.
+- The server listens on `localhost` only.
+- Email and calendar text goes to Claude through your own account when scans, briefs, and questions run. Check that this fits your organization's data policy.
+- `data\` and `settings.json` hold personal content and are excluded from Git by `.gitignore`.
 
 ## Troubleshooting
 
-- **Cards say "AI summary unavailable"**: Claude Code is not signed in or timed out. Run `claude` in PowerShell once, then **Restart Server** from the tray.
-- **"The server did not start"**: open `data\server.log`. If PowerShell scripts are blocked on your PC, ask IT about script execution.
-- **Nothing happens when drafting**: the Reply All window may have opened behind the dashboard. Check the Outlook icon on the taskbar.
-- **The log**: right-click the tray icon, then **View Log**.
+- **No replies in Teams:** open `data\server.log` from the tray menu. A sign-in prompt in the assistant's Chrome window needs your attention.
+- **Mail scan says it failed:** the assistant posts the Microsoft sign-in error once. Re-authorize the Microsoft 365 connector in your Claude account.
+- **"The server did not start":** check `data\server.log`. Some IT policies block PowerShell scripts.
 
-## Project layout
+## Layout
 
 ```
 Install.cmd / Install.ps1        setup (safe to re-run)
 Uninstall.cmd / Uninstall.ps1    removes shortcuts and the .exe
 settings.example.json            template for settings.json
 app/
-  server.ps1                     local server, Outlook access, Claude calls, tray icon
+  server.ps1                     tray app, local server, notes and streams endpoints
   Index.html                     the dashboard
-  launcher.cs                    source for DailyBriefing.exe
-  launch.vbs                     fallback launcher if the .exe cannot be built
+  lib/common.ps1                 shared helpers, Claude job runner for the Notes editor
+  assistant/                     Teams assistant: mail, calendar, to-dos, notes, reminders, commands
+  tests/assistant-tests.ps1      offline checks for the assistant
+  launcher.cs, launch.vbs        launchers
   icons/                         app icons
-docs/screenshots/                README images (sample data only)
-data/                            created on first run: notes, caches, logs (not in Git)
+data/                            created on first run (not in Git)
 ```

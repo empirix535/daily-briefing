@@ -6,820 +6,360 @@
     <title>Daily Briefing</title>
     <link rel="icon" type="image/png" sizes="256x256" href="/icons/agenda-256.png?v=4">
     <link rel="icon" href="/icons/agenda.ico?v=4">
-    <meta name="theme-color" content="#1f1e1d">
+    <meta name="theme-color" content="#1f1e1d" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f7f3ee" media="(prefers-color-scheme: light)">
     <meta name="application-name" content="Daily Briefing">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
     <style>
+        :root { color-scheme: light dark; --bg: #f7f3ee; --surface: #fffdfa; --surface-2: #f2ece4; --inset: #efe8df; --border: #e6ddd1; --border-strong: #d3c7b8; --text-main: #2a241e; --text-sub: #6a6055; --text-faint: #9a8f82; --accent: #bf5a36; --accent-hover: #a64c2b; --accent-ink: #ffffff; --accent-soft: rgba(191,90,54,0.10); --danger: #b3261e; --danger-soft: rgba(179,38,30,0.10); --success: #4a7c4f; --success-soft: rgba(74,124,79,0.12); --info: #4f7396; --info-soft: rgba(79,115,150,0.12); --shadow: 0 1px 2px rgba(42,36,30,0.05), 0 4px 16px rgba(42,36,30,0.06); }
+        :root[data-theme="light"] { color-scheme: light; }
+        @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1f1e1d; --surface: #262624; --surface-2: #2d2c29; --inset: #1a1917; --border: #3a3935; --border-strong: #4d4b46; --text-main: #f4f2ec; --text-sub: #a8a59c; --text-faint: #7a776f; --accent: #e08a68; --accent-hover: #ea9f80; --accent-ink: #1f1e1d; --accent-soft: rgba(224,138,104,0.15); --danger: #ef8a7c; --danger-soft: rgba(239,138,124,0.14); --success: #8cbf8a; --success-soft: rgba(140,191,138,0.12); --info: #8fb3d4; --info-soft: rgba(143,179,212,0.13); --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25); } }
+        :root[data-theme="dark"] { color-scheme: dark; --bg: #1f1e1d; --surface: #262624; --surface-2: #2d2c29; --inset: #1a1917; --border: #3a3935; --border-strong: #4d4b46; --text-main: #f4f2ec; --text-sub: #a8a59c; --text-faint: #7a776f; --accent: #e08a68; --accent-hover: #ea9f80; --accent-ink: #1f1e1d; --accent-soft: rgba(224,138,104,0.15); --danger: #ef8a7c; --danger-soft: rgba(239,138,124,0.14); --success: #8cbf8a; --success-soft: rgba(140,191,138,0.12); --info: #8fb3d4; --info-soft: rgba(143,179,212,0.13); --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.25); }
         :root {
-            --bg: #1f1e1d;
-            --surface: #262624;
-            --surface-2: #2d2c29;
-            --inset: #1a1917;
-            --border: #3a3935;
-            --border-strong: #4d4b46;
-            --text-main: #f4f2ec;
-            --text-sub: #a8a59c;
-            --text-faint: #7a776f;
-            --accent: #d97757;
-            --accent-soft: rgba(217, 119, 87, 0.14);
-            --accent-hover: #e58a6c;
-            --info: #8fb3d4;
-            --info-soft: rgba(143, 179, 212, 0.13);
-            --success: #8cbf8a;
-            --success-soft: rgba(140, 191, 138, 0.12);
             --font-ui: 'Inter', 'Segoe UI', system-ui, sans-serif;
             --font-display: 'Source Serif 4', Georgia, serif;
+            --r-sm: 0.45rem; --r-md: 0.7rem; --r-lg: 1rem;
+            --ease: 0.15s ease;
         }
 
         /* Scales all rem sizes: ~15px on 1920 wide, ~18px on 3440 wide */
         html { font-size: clamp(15px, calc(12px + 0.175vw), 19px); }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: var(--font-ui);
-            background-color: var(--bg);
+            background: var(--bg);
             color: var(--text-main);
-            padding: 1.75rem 2rem;
+            padding: 2rem 2.2rem 3rem;
             display: flex;
             flex-direction: column;
-            gap: 1.4rem;
+            gap: 1.5rem;
             min-height: 100vh;
             font-size: 1rem;
-            line-height: 1.45;
+            line-height: 1.5;
             -webkit-font-smoothing: antialiased;
         }
+        /* One centered reading column */
+        body > * { width: 100%; max-width: 66rem; margin-inline: auto; min-width: 0; }
+        html, body { overflow-x: hidden; }
+        button, input, textarea, select { font-family: inherit; }
+        ::selection { background: var(--accent-soft); }
 
-        button, input, textarea { font-family: inherit; }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        /* --- HEADER --- */
+        header { display: flex; justify-content: space-between; align-items: flex-end; gap: 0.6rem 1rem; flex-wrap: wrap; }
+        h1 { font-family: var(--font-display); font-size: 1.9rem; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; }
+        .sub-header { font-size: 0.92rem; color: var(--text-sub); margin-top: 0.3rem; }
+        .header-right { display: flex; align-items: center; gap: 0.4rem; }
+        .last-updated {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            font-size: 0.8rem; color: var(--text-sub);
+            background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+            padding: 0.28rem 0.8rem 0.28rem 0.65rem; white-space: nowrap;
         }
+        .last-updated::before { content: ''; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+        .last-updated:empty { display: none; }
+        .last-updated.alert { color: var(--danger); border-color: var(--danger); }
+        .last-updated.alert::before { background: var(--danger); }
 
-        h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 600; letter-spacing: -0.01em; }
-        .sub-header { font-size: 0.95rem; color: var(--text-sub); margin-top: 0.2rem; }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-            background: var(--success-soft);
-            color: var(--success);
-            padding: 0.3rem 0.8rem;
-            border-radius: 999px;
-            font-size: 0.85rem;
-            border: 1px solid rgba(140, 191, 138, 0.25);
-            margin-right: 0.8rem;
-        }
-        .status-dot { width: 0.5rem; height: 0.5rem; background: var(--success); border-radius: 50%; }
-
-        .btn-refresh {
-            background: var(--surface);
-            color: var(--text-main);
-            border: 1px solid var(--border);
-            padding: 0.55rem 1.1rem;
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: border-color 0.15s ease, background 0.15s ease;
-        }
-        .btn-refresh:hover { border-color: var(--border-strong); background: var(--surface-2); }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.8rem;
-            padding: 1.3rem 1.5rem;
-        }
-
-        .card-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-        }
-
-        /* --- TIMELINE (1D axis) --- */
-        .tl-head { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 0.4rem; }
-        .tl-head .card-title { margin-bottom: 0; }
-        .tl-allday { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-        .tl-chip {
-            font-size: 0.8rem;
-            color: var(--text-sub);
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 0.15rem 0.65rem;
-        }
-
-        .tl-inner { position: relative; margin: 0 1.5rem; }
-        .tl-labels { position: relative; height: 2.5rem; }
-        .tl-axis-zone { position: relative; height: 2.9rem; }
-
-        .tl-axis {
-            position: absolute;
-            left: 0; right: 0;
-            top: 0.75rem;
-            height: 2px;
-            background: var(--border-strong);
-            border-radius: 1px;
-        }
-
-        .tl-tick {
-            position: absolute;
-            top: calc(0.75rem - 4px);
-            width: 1px;
-            height: 10px;
-            background: var(--border-strong);
-        }
-        .tl-tick-label {
-            position: absolute;
-            top: 1.45rem;
-            transform: translateX(-50%);
-            font-size: 0.85rem;
-            color: var(--text-faint);
-            white-space: nowrap;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .tl-seg {
-            position: absolute;
-            top: calc(0.75rem - 5px);
-            height: 12px;
-            background: var(--accent);
-            border-radius: 6px;
-            opacity: 0.9;
-            min-width: 4px;
-            box-shadow: 0 0 0 2px var(--surface);   /* separates back-to-back or overlapping meetings */
-            cursor: default;
-        }
-        .tl-seg::before {
-            content: '';
-            position: absolute;
-            inset: -8px 0;   /* taller invisible hover area */
-        }
-
-        .tl-label {
-            position: absolute;
-            padding: 0.3rem 0.55rem;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-bottom: 2px solid var(--accent);
-            border-radius: 0.4rem 0.4rem 0.2rem 0.2rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-            line-height: 1.25;
-            color: var(--text-main);
-            box-sizing: border-box;
-            /* whole words only; long titles stop at 2 lines with an ellipsis (hover for the full title) */
-            overflow-wrap: normal;
-            word-break: normal;
-            hyphens: none;
-            display: -webkit-box;
-            -webkit-box-orient: vertical;
-            -webkit-line-clamp: 2;
-            overflow: hidden;
-            z-index: 2;
-        }
-        .tl-label.measuring { display: block; white-space: nowrap; width: auto !important; -webkit-line-clamp: unset; }
-        /* Meeting states: past meetings fade, the current one glows */
-        .tl-seg, .tl-label, .tl-leader { transition: opacity 0.4s ease, box-shadow 0.4s ease, background 0.4s ease; }
-        .tl-seg.past { opacity: 0.35; }
-        .tl-label.past { opacity: 0.4; }
-        .tl-leader.past { opacity: 0.35; }
-        .tl-seg.current { opacity: 1; box-shadow: 0 0 0 2px var(--surface), 0 0 10px 2px rgba(217, 119, 87, 0.6); }
-        .tl-label.current { background: rgba(217, 119, 87, 0.16); border-color: var(--accent); }
-        .tl-status { margin-left: auto; font-size: 0.85rem; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
-        .tl-status b { color: var(--accent-hover); font-weight: 600; }
-
-        /* Extra rows for overlapping meetings (Gantt-style), stacked just above the axis */
-        .tl-lanes { position: relative; height: 0; }
-        .tl-lanes .tl-seg { top: auto; }
-        .tl-leader {
-            position: absolute;
-            width: 1px;
-            background: var(--border-strong);
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        /* "Now" marker: glowing dot centered on the axis line */
-        .now-line {
-            position: absolute;
-            bottom: calc(2.15rem - 1px - 7px);
-            width: 14px;
-            height: 14px;
-            margin-left: -7px;
-            border-radius: 50%;
-            background: var(--text-main);
-            box-shadow: 0 0 6px 2px rgba(244, 242, 236, 0.55), 0 0 16px 4px rgba(217, 119, 87, 0.45);
-            z-index: 10;
-            pointer-events: none;
-        }
-
-        /* --- TABS --- */
-        .sticky-top {
-            position: sticky; top: 0; z-index: 40;
-            background: var(--bg);
-            display: flex; flex-direction: column; gap: 1.1rem;
-            padding-top: 0.6rem; margin-top: -0.6rem;
-        }
-        .sticky-top .tabs { margin-bottom: 0; padding-bottom: 0; }
-        .tabs {
-            display: flex;
-            gap: 1.75rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1.3rem;
-        }
-
+        /* --- TABS: segmented control --- */
+        .sticky-top { position: sticky; top: 0; z-index: 40; background: var(--bg); padding: 0.6rem 0; margin-top: -0.6rem; }
+        .tabs { display: inline-flex; gap: 0.15rem; padding: 0.25rem; background: var(--inset); border: 1px solid var(--border); border-radius: var(--r-md); }
         .tab {
-            padding-bottom: 0.7rem;
-            color: var(--text-sub);
-            font-size: 1.05rem;
-            font-weight: 500;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: color 0.15s ease;
+            padding: 0.42rem 1.15rem; border-radius: calc(var(--r-md) - 0.2rem);
+            color: var(--text-sub); font-size: 0.92rem; font-weight: 500; cursor: pointer;
+            transition: color var(--ease), background var(--ease);
+            user-select: none;
         }
         .tab:hover { color: var(--text-main); }
+        .tab.active { background: var(--surface); color: var(--text-main); box-shadow: var(--shadow); }
 
-        .tab.active {
-            color: var(--text-main);
-            border-bottom-color: var(--accent);
-        }
-
-        /* --- INBOX PANELS --- */
-        .inbox-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.3rem;
-        }
-
-        .panel {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.7rem;
-            padding: 1.1rem;
-        }
-
-        .panel-req { border-top: 3px solid var(--accent); }
-        .panel-fyi { border-top: 3px solid var(--info); }
-
-        .panel-header {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .panel-req .panel-header { color: var(--accent); }
-        .panel-fyi .panel-header { color: var(--info); }
-
-        .email-card {
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 0.6rem;
-            padding: 1rem 1.1rem;
-            margin-bottom: 0.8rem;
-        }
-
-        .email-subject { font-size: 1.02rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.15rem; }
-        .brief { display: grid; grid-template-columns: 1fr; gap: 0.05rem 0; font-size: 0.92rem; margin: 0.2rem 0 0.6rem; line-height: 1.45; }
-        .brief-k { color: var(--text-faint); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.35rem; white-space: nowrap; }
-        .brief-v { color: var(--text-main); }
-        .brief-v.foryou-yes { color: var(--accent); font-weight: 500; }
-        .panel-fyi .brief-v.foryou-yes { color: var(--info); }
-        .convo { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.2rem 0 0.6rem; }
-        .bubble { background: var(--inset); border: 1px solid var(--border); border-radius: 0.55rem; padding: 0.4rem 0.6rem; font-size: 0.88rem; line-height: 1.45; }
-        .bubble.me { border-color: rgba(217, 119, 87, 0.5); margin-left: 1.5rem; }
-        .bubble-head { font-size: 0.76rem; color: var(--text-faint); margin-bottom: 0.1rem; }
-        .bubble-head b { color: var(--text-sub); font-weight: 600; }
-        .email-meta { font-size: 0.82rem; color: var(--text-faint); margin-bottom: 0.4rem; }
-        .email-task { font-size: 0.95rem; color: var(--accent); font-weight: 500; margin-bottom: 0.5rem; }
-        .panel-fyi .email-task { color: var(--info); }
-
-        .play-list {
-            padding-left: 1.2rem;
-            font-size: 0.9rem;
-            color: var(--text-sub);
-            margin-bottom: 0.4rem;
-        }
-        .play-list li { margin-bottom: 0.2rem; }
-
-        /* Take action toggle */
-        .card-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap; }
-
-        .unread-badge {
-            display: inline-block;
-            margin-left: 0.6rem;
-            padding: 0.05rem 0.5rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            vertical-align: middle;
-            color: var(--accent-hover);
-            background: var(--accent-soft);
-        }
-        .panel-fyi .unread-badge { color: var(--info); background: var(--info-soft); }
-
-        .thread-list { list-style: none; margin: 0.2rem 0 0.5rem; padding-left: 0.2rem; border-left: 2px solid var(--border); }
-        .thread-list li { padding: 0.2rem 0 0.35rem 0.75rem; }
-        .thread-from { font-size: 0.88rem; font-weight: 600; color: var(--text-main); }
-        .thread-time { font-size: 0.8rem; color: var(--text-faint); margin-left: 0.5rem; font-variant-numeric: tabular-nums; }
-        .thread-sum { font-size: 0.9rem; color: var(--text-sub); }
-
-        .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.3rem 0 0.5rem; }
-        .chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            max-width: 100%;
-            padding: 0.25rem 0.65rem;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            background: var(--inset);
-            color: var(--text-main);
-            font-size: 0.84rem;
-            text-decoration: none;
-            cursor: pointer;
-            transition: border-color 0.15s ease, color 0.15s ease;
-        }
-        .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22rem; }
-        .chip svg { flex-shrink: 0; }
-        .chip-link { color: var(--info); }
-        .chip-link:hover { border-color: var(--info); }
-        .chip-att:hover { border-color: var(--border-strong); }
-        .chip-att.busy { opacity: 0.6; cursor: wait; }
-        .chip-size { color: var(--text-faint); font-size: 0.76rem; }
-        .btn-take-action {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-sub);
-            border-radius: 0.4rem;
-            padding: 0.3rem 0.8rem;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        .btn-take-action:hover { color: var(--text-main); border-color: var(--border-strong); }
-        .btn-take-action.open { color: var(--text-main); background: var(--surface); }
-        .btn-clear:hover { color: var(--success); border-color: var(--success); }
-        .email-card { transition: opacity 0.25s ease, transform 0.25s ease; }
-        .email-card.clearing { opacity: 0; transform: translateX(12px); }
-        .action-panel { margin-top: 0.6rem; }
-
-        .control-row {
-            display: flex;
-            gap: 0.5rem;
-            align-items: flex-start;
-        }
-        textarea.input-prompt {
-            resize: vertical;
-            min-height: 2.3rem;
-            line-height: 1.4;
-            overflow-y: hidden;
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-        }
-
-        .input-prompt {
-            flex: 1;
-            background: var(--inset);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            border-radius: 0.4rem;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.9rem;
-        }
-        .input-prompt::placeholder { color: var(--text-faint); }
-        .input-prompt:focus { outline: none; border-color: var(--border-strong); }
-
-        .btn-action {
-            background: var(--accent-soft);
-            border: 1px solid var(--accent);
-            color: var(--accent-hover);
-            padding: 0.5rem 1rem;
-            border-radius: 0.4rem;
-            font-size: 0.88rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        .btn-action:hover { background: var(--accent); color: #1f1e1d; }
-        .btn-action:disabled { opacity: 0.6; cursor: wait; }
-        .btn-ask { background: var(--info-soft); border-color: var(--info); color: var(--info); }
-        .btn-ask:hover { background: var(--info); color: #1f1e1d; }
-
-        .ai-answer {
-            margin-top: 0.7rem;
-            padding: 0.75rem 0.9rem;
-            background: var(--inset);
-            border: 1px solid var(--border);
-            border-left: 3px solid var(--info);
-            border-radius: 0.4rem;
-            font-size: 0.92rem;
-            line-height: 1.55;
-        }
-        .ai-q { font-size: 0.85rem; color: var(--text-sub); margin-bottom: 0.4rem; white-space: pre-wrap; }
-        .ai-a { white-space: pre-wrap; color: var(--text-main); }
-        .last-updated { font-size: 0.85rem; color: var(--text-faint); margin-right: 0.8rem; }
-
+        /* --- CARD --- */
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1.5rem 1.7rem 1.7rem; box-shadow: var(--shadow); }
+        .card-title { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em; }
         .muted { color: var(--text-sub); font-size: 0.92rem; }
 
-        /* --- RUNNING NOTES (CHECKLIST) --- */
-        .todo-toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .todo-toolbar .input-prompt { font-size: 0.95rem; padding: 0.55rem 0.75rem; }
-        .todo-item { margin-bottom: 0.2rem; }
-        .todo-child { margin-left: 1.9rem; }
-        .todo-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.35rem 0.5rem;
-            border-radius: 0.4rem;
+        /* --- BUTTONS AND INPUTS --- */
+        .btn-refresh {
+            background: transparent; color: var(--text-sub); border: 1px solid var(--border);
+            padding: 0.5rem 0.95rem; border-radius: var(--r-sm); font-size: 0.88rem; font-weight: 500; cursor: pointer;
+            transition: color var(--ease), border-color var(--ease), background var(--ease);
         }
+        .btn-refresh:hover { color: var(--text-main); border-color: var(--border-strong); background: var(--surface-2); }
+        .btn-action {
+            background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent);
+            padding: 0.5rem 1.1rem; border-radius: var(--r-sm); font-size: 0.88rem; font-weight: 600; cursor: pointer;
+            transition: background var(--ease), border-color var(--ease);
+        }
+        .btn-action:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn-action:disabled { opacity: 0.6; cursor: wait; }
+        .input-prompt {
+            flex: 1; background: var(--inset); border: 1px solid var(--border); color: var(--text-main);
+            border-radius: var(--r-sm); padding: 0.5rem 0.75rem; font-size: 0.92rem;
+            transition: border-color var(--ease), box-shadow var(--ease);
+        }
+        .input-prompt::placeholder { color: var(--text-faint); }
+        .input-prompt:focus, .jot-text:focus, .jot-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        textarea.input-prompt { resize: vertical; min-height: 2.3rem; line-height: 1.4; overflow-y: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+        /* --- TO-DO --- */
+        .todo-toolbar {
+            display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.3rem;
+            background: var(--inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.35rem 0.35rem 0.35rem 0.5rem;
+            transition: border-color var(--ease), box-shadow var(--ease);
+        }
+        .todo-toolbar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .todo-toolbar .input-prompt { background: transparent; border: 0; box-shadow: none; font-size: 0.98rem; padding: 0.5rem 0.4rem; }
+        .todo-new-due { flex: 0 0 auto; }
+        .todo-toolbar .btn-refresh { border-color: transparent; }
+
+        .todo-item { margin-bottom: 0.1rem; }
+        .todo-parent { margin-bottom: 0.5rem; }
+        .todo-child { margin-left: 1.45rem; padding-left: 0.5rem; border-left: 1px solid var(--border); }
+        .todo-row { position: relative; display: flex; align-items: center; gap: 0.55rem; padding: 0.38rem 0.5rem; border-radius: var(--r-sm); transition: background var(--ease); }
         .todo-row:hover { background: var(--surface-2); }
-        .todo-row:hover .todo-btn, .todo-row:hover .todo-grip { opacity: 1; }
-        .todo-grip { opacity: 0; cursor: grab; color: var(--text-faint); font-size: 0.9rem; user-select: none; padding: 0 0.1rem; letter-spacing: -0.15em; }
+        .todo-row:hover .todo-acts, .todo-row:hover .todo-grip { opacity: 1; pointer-events: auto; }
+        .todo-grip { opacity: 0; pointer-events: none; cursor: grab; color: var(--text-faint); font-size: 0.85rem; user-select: none; letter-spacing: -0.15em; width: 1rem; flex-shrink: 0; transition: opacity var(--ease); }
         .todo-item.dragging { opacity: 0.4; }
         .todo-row.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
         .todo-row.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
-        .todo-row input[type=checkbox] { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
-        .todo-text {
-            flex: 1;
-            background: transparent;
-            border: 1px solid transparent;
-            color: var(--text-main);
-            font-size: 1rem;
-            padding: 0.2rem 0.4rem;
-            border-radius: 0.3rem;
+
+        .todo-row input[type=checkbox] {
+            appearance: none; -webkit-appearance: none; flex-shrink: 0; cursor: pointer;
+            width: 1.15rem; height: 1.15rem; border: 1.5px solid var(--border-strong); border-radius: 50%; background: transparent;
+            display: grid; place-content: center; transition: background var(--ease), border-color var(--ease);
         }
-        .todo-text:focus { outline: none; border-color: var(--border); background: var(--inset); }
-        .todo-parent > .todo-row .todo-text { font-weight: 600; }
-        .todo-text.done { text-decoration: line-through; color: var(--text-faint); }
-        .todo-count { font-size: 0.8rem; color: var(--text-faint); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+        .todo-row input[type=checkbox]:hover { border-color: var(--accent); }
+        .todo-row input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+        .todo-row input[type=checkbox]:checked::after {
+            content: ''; width: 0.3rem; height: 0.55rem; border: solid var(--accent-ink); border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg);
+        }
+        .todo-text {
+            flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; color: var(--text-main);
+            font-size: 0.98rem; padding: 0.22rem 0.4rem; border-radius: var(--r-sm); overflow-wrap: anywhere;
+        }
+        .todo-text:focus { outline: none; border-color: var(--border-strong); background: var(--inset); }
+        .todo-parent > .todo-row .todo-text { font-weight: 600; font-size: 1.02rem; }
+        .todo-text.done { text-decoration: line-through; text-decoration-color: var(--border-strong); color: var(--text-faint); }
+
+        .todo-due {
+            order: 2; min-width: 5.4rem; text-align: center;
+            font-size: 0.74rem; font-weight: 500; color: var(--text-sub); background: var(--surface-2); border: 1px solid transparent;
+            border-radius: 999px; padding: 0.12rem 0.6rem; flex-shrink: 0; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
+        }
+        .todo-row:hover .todo-due:not(.soon):not(.late) { background: var(--inset); }
+        .todo-due-empty { opacity: 0; background: transparent; border: 1px dashed var(--border-strong); }
+        .todo-row:hover .todo-due-empty { opacity: 1; }
+        .todo-due.soon { color: var(--accent); background: var(--accent-soft); }
+        .todo-due.late { color: var(--danger); background: var(--danger-soft); }
+        .todo-due-input { font-size: 0.8rem; background: var(--inset); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 0.2rem 0.4rem; }
+        .todo-new-due { font-size: 0.85rem; padding: 0.4rem 0.5rem; }
+        .todo-count { order: 1; font-size: 0.74rem; color: var(--text-faint); flex-shrink: 0; font-variant-numeric: tabular-nums; background: var(--surface-2); border-radius: 999px; padding: 0.08rem 0.5rem; }
+        .todo-acts {
+            position: absolute; right: 6.4rem; top: 50%; transform: translateY(-50%); display: flex; gap: 0.3rem;
+            padding-left: 1.6rem; background: linear-gradient(90deg, transparent, var(--surface-2) 1.4rem);
+            opacity: 0; pointer-events: none; transition: opacity var(--ease);
+        }
         .todo-btn {
-            opacity: 0;
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-sub);
-            border-radius: 0.3rem;
-            font-size: 0.82rem;
-            padding: 0.15rem 0.55rem;
-            cursor: pointer;
-            flex-shrink: 0;
+            background: var(--surface); border: 1px solid var(--border); color: var(--text-sub);
+            border-radius: var(--r-sm); font-size: 0.78rem; padding: 0.15rem 0.55rem; cursor: pointer; flex-shrink: 0; white-space: nowrap;
+            transition: color var(--ease), border-color var(--ease);
         }
         .todo-btn:hover { color: var(--text-main); border-color: var(--border-strong); }
 
-        /* --- TOMORROW --- */
-        .agenda-row {
-            display: flex;
-            gap: 1.1rem;
-            padding: 0.8rem 1rem;
-            border: 1px solid var(--border);
-            border-left: 3px solid var(--accent);
-            border-radius: 0.5rem;
-            background: var(--surface-2);
-            margin-bottom: 0.6rem;
+        /* --- NOTES --- */
+        .jot-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.7rem; margin-bottom: 0.9rem; }
+        .jot-select {
+            flex: 0 1 18rem; min-width: 0; padding: 0.45rem 0.7rem; border-radius: var(--r-sm);
+            background: var(--inset); color: var(--text-main); border: 1px solid var(--border); font-size: 0.95rem; font-weight: 600;
+            transition: border-color var(--ease), box-shadow var(--ease);
         }
-        .agenda-time { width: 11rem; flex-shrink: 0; font-size: 0.95rem; color: var(--accent-hover); font-weight: 500; font-variant-numeric: tabular-nums; }
-        .agenda-subject { font-size: 1rem; font-weight: 600; }
-        .agenda-loc { font-size: 0.88rem; color: var(--text-sub); margin-top: 0.15rem; }
+        .jot-status { margin-left: auto; font-size: 0.8rem; color: var(--text-faint); }
+        .jot-link { background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 0.85rem; padding: 0.2rem 0.4rem; border-radius: var(--r-sm); }
+        .jot-link:hover { color: var(--accent); background: var(--accent-soft); }
+        .jot-wrap { display: flex; gap: 1.1rem; align-items: stretch; }
+        .jot-main { flex: 1 1 auto; min-width: 0; width: 100%; }
+        .jot-text {
+            width: 100%; min-height: 12rem; max-height: 85vh; resize: none; overflow-y: auto; display: block; background: var(--inset); color: var(--text-main);
+            border: 1px solid var(--border); border-radius: var(--r-md); padding: 1.1rem 1.3rem; font-size: 0.97rem; line-height: 1.7;
+            transition: border-color var(--ease), box-shadow var(--ease);
+        }
+        .jot-ask { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; font-size: 0.9rem; color: var(--text-sub); }
+        .jot-ask input { flex: 1; min-width: 0; }
+
+
+        /* --- NOTES AI PANEL --- */
+        .jot-ai { flex: 0 0 22rem; display: none; flex-direction: column; min-height: 24rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+        .jot-wrap.ai-on .jot-ai { display: flex; }
+        .ai-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+        .ai-head .ai-sel { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--accent); }
+        .ai-log { flex: 1 1 0; min-height: 8rem; overflow-y: auto; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.6rem; }
+        .ai-msg { max-width: 92%; padding: 0.5rem 0.75rem; border-radius: var(--r-md); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .ai-msg.me { align-self: flex-end; background: var(--accent-soft); color: var(--text-main); }
+        .ai-msg.bot { align-self: flex-start; background: var(--inset); border: 1px solid var(--border); color: var(--text-main); }
+        .ai-msg.err { align-self: flex-start; background: var(--danger-soft); color: var(--danger); }
+        .ai-msg.wait { color: var(--text-faint); font-style: italic; }
+        .ai-undo { align-self: flex-start; margin-top: 0.4rem; }
+        .ai-empty { color: var(--text-faint); font-size: 0.85rem; line-height: 1.5; }
+        .ai-form { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem; border-top: 1px solid var(--border); }
+        .ai-in { width: 100%; min-height: 3.2rem; max-height: 9rem; resize: vertical; background: var(--inset); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 0.5rem 0.65rem; font: inherit; font-size: 0.9rem; }
+        .ai-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .ai-row { display: flex; align-items: center; gap: 0.5rem; }
+        .ai-row .jot-status { font-size: 0.75rem; }
+        @media (max-width: 1100px) { .jot-wrap { flex-direction: column; } .jot-ai { flex-basis: auto; min-height: 22rem; } }
+
+        /* --- STREAMS (shared tokens; content and behavior untouched) --- */
+        .st-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.7rem; margin-bottom: 1rem; }
+        .st-tile { background: var(--inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.75rem 0.95rem; font-size: 0.88rem; color: var(--text-sub); }
+        .st-num { font-family: var(--font-display); font-size: 1.7rem; font-weight: 600; color: var(--text-main); line-height: 1.2; }
+        .st-small { font-size: 0.78rem; color: var(--text-faint); }
+        .st-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+        .st-chip { background: transparent; border: 1px solid var(--border); color: var(--text-sub); border-radius: 999px; padding: 0.25rem 0.85rem; font: inherit; font-size: 0.84rem; cursor: pointer; transition: all var(--ease); }
+        .st-chip:hover { border-color: var(--border-strong); color: var(--text-main); }
+        .st-chip.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+        .st-group { font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 1.1rem 0 0.5rem; cursor: default; }
+        summary.st-group { cursor: pointer; }
+        .st-card { background: var(--inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.9rem 1rem; margin-bottom: 0.65rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .st-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; }
+        .st-title { font-weight: 600; overflow-wrap: anywhere; }
+        .st-sub { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+        .st-mono { font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.8rem; color: var(--text-sub); overflow-wrap: anywhere; }
+        .st-tag { font-size: 0.74rem; color: var(--info); background: var(--info-soft); border-radius: 999px; padding: 0.08rem 0.55rem; }
+        .st-ball { font-size: 0.76rem; white-space: nowrap; color: var(--text-sub); border: 1px solid var(--border); border-radius: 999px; padding: 0.1rem 0.65rem; }
+        .st-ball { cursor: pointer; }
+        .st-ball:hover { border-color: var(--border-strong); color: var(--text-main); }
+        .st-ball.unset { color: var(--text-faint); border-style: dashed; }
+        .st-ball-in { width: 9rem; font-size: 0.8rem; padding: 0.15rem 0.6rem; border-radius: 999px; }
+        .st-ball.you { color: var(--accent); background: var(--accent-soft); border-color: transparent; font-weight: 600; }
+        .st-bar { display: flex; gap: 3px; }
+        .st-seg { flex: 1; min-width: 0; height: 1.3rem; border-radius: 4px; background: var(--surface-2); font-size: 0.7rem; line-height: 1.3rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-sub); }
+        .st-seg.past { background: var(--accent-soft); color: var(--accent); }
+        .st-seg.cur { background: var(--accent); flex: 2.2; font-weight: 600; color: var(--accent-ink); }
+        .st-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; }
+        .st-lab { font-size: 0.8rem; color: var(--text-faint); display: inline-flex; align-items: center; gap: 0.35rem; }
+        .st-stage, .st-sel { background: var(--surface); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 0.15rem 0.4rem; font: inherit; font-size: 0.84rem; }
+        .st-next { display: flex; align-items: center; gap: 0.5rem; }
+        .st-next input { flex: 1; min-width: 0; padding: 0.3rem 0.55rem; font-size: 0.88rem; }
+        .st-reject, .st-ideaform { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.86rem; color: var(--text-sub); }
+        .st-reject input, .st-ideaform input { flex: 1 1 10rem; min-width: 0; padding: 0.3rem 0.55rem; }
+        .st-ideaform { margin-bottom: 0.6rem; }
+        .st-fact { font-size: 0.78rem; color: var(--text-faint); }
+        .st-flag { color: var(--accent); }
+        .st-idea, .st-row { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.5rem 0.2rem; border-bottom: 1px solid var(--border); }
+        .st-row { justify-content: flex-start; }
+        .st-row .st-rt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+        .st-year { color: var(--text-faint); font-size: 0.84rem; width: 2.8rem; flex-shrink: 0; }
+        .st-section { margin-top: 0.4rem; }
 
         /* --- SERVER STOPPED OVERLAY --- */
-        .server-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(20, 19, 18, 0.82);
-            backdrop-filter: blur(3px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
+        .server-overlay { position: fixed; inset: 0; background: rgba(15, 15, 14, 0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; max-width: none; }
         .server-overlay.show { display: flex; }
-        .server-overlay-box {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 0.8rem;
-            padding: 1.6rem 1.9rem;
-            max-width: 32rem;
-            text-align: center;
-        }
+        .server-overlay-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1.7rem 2rem; max-width: 32rem; text-align: center; box-shadow: var(--shadow); }
         .server-overlay-box h2 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 600; margin-bottom: 0.5rem; }
-        .server-overlay-box p { color: var(--text-sub); font-size: 0.95rem; margin-bottom: 1.1rem; }
+        .server-overlay-box p { color: var(--text-sub); font-size: 0.95rem; margin-bottom: 1.2rem; }
         .server-overlay-box .btns { display: flex; gap: 0.6rem; justify-content: center; }
 
-        /* --- FILTERED BOX --- */
-        .noise-box { margin-top: 0.8rem; border: 1px dashed var(--border); border-radius: 0.6rem; background: var(--inset); }
-        .noise-box > summary {
-            list-style: none;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0.55rem 0.8rem;
-            cursor: pointer;
-            color: var(--text-sub);
-            font-size: 0.9rem;
-        }
-        .noise-box > summary::-webkit-details-marker { display: none; }
-        .noise-box > summary .noise-title::before { content: '\25B8'; display: inline-block; margin-right: 0.45rem; transition: transform 0.15s ease; }
-        .noise-box[open] > summary .noise-title::before { transform: rotate(90deg); }
-        .noise-list { padding: 0 0.5rem 0.5rem; }
-
-        /* --- COMPACT ROWS --- */
-        .cu-row {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 0.3rem 0.8rem;
-            padding: 0.55rem 0.7rem;
-            border-radius: 0.45rem;
-            border: 1px solid transparent;
-            transition: opacity 0.25s ease, background 0.15s ease;
-        }
-        .cu-row:hover, .cu-row.open { background: var(--surface-2); border-color: var(--border); }
-        .cu-row.clearing { opacity: 0; }
-        .cu-row-main { cursor: pointer; min-width: 0; }
-        .cu-row-top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
-        .cu-subj { font-weight: 600; font-size: 0.95rem; }
-        .cu-meta { font-size: 0.8rem; color: var(--text-faint); }
-        .cu-task { font-size: 0.9rem; color: var(--text-sub); margin-top: 0.1rem; }
-        .cu-row-btns { display: flex; gap: 0.4rem; align-items: flex-start; }
-        .cu-row-btns .btn-take-action { margin-top: 0; }
-        .cu-expand { grid-column: 1 / -1; margin-top: 0.3rem; }
-
-        /* --- CATCH-UP --- */
-        .cu-banner {
-            display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-            padding: 0.8rem 1.1rem;
-            border: 1px solid var(--accent);
-            background: var(--accent-soft);
-            border-radius: 0.7rem;
-            font-size: 0.98rem;
-        }
-        .cu-banner-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
-        .inv-bar { display: flex; flex-direction: column; gap: 0.4rem; }
-        .limit-note { padding: 0.6rem 1rem; border: 1px solid var(--border-strong); background: var(--surface-2); border-radius: 0.7rem; font-size: 0.92rem; color: var(--text-sub); }
-        .limit-note b { color: var(--text-main); font-weight: 600; }
-        .inv-row {
-            display: flex; align-items: center; gap: 0.8rem;
-            padding: 0.6rem 1rem; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 0.7rem; font-size: 0.95rem;
-        }
-        .inv-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .inv-label { color: var(--accent); font-weight: 600; margin-right: 0.4rem; }
-        .inv-meta { color: var(--text-sub); }
-        .cu-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-        .cu-controls { display: flex; align-items: center; gap: 0.6rem; }
-        .cu-date { flex: none; width: 11rem; color-scheme: dark; }
-        .cu-progress { height: 6px; background: var(--inset); border-radius: 3px; margin-top: 0.6rem; overflow: hidden; }
-        .cu-bar { height: 100%; width: 4%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; }
-        .cu-overview {
-            margin-top: 1rem;
-            padding: 1rem 1.2rem;
-            background: var(--surface-2);
-            border-left: 3px solid var(--accent);
-            border-radius: 0.5rem;
-            font-family: var(--font-display);
-            font-size: 1.15rem;
-            line-height: 1.55;
-        }
-        .cu-stats { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-faint); }
-        .cu-section { margin-top: 1.6rem; }
-        .cu-h { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }
-        .cu-count {
-            font-size: 0.75rem; font-weight: 600; color: var(--text-sub);
-            background: var(--surface-2); border: 1px solid var(--border);
-            border-radius: 999px; padding: 0.02rem 0.5rem; margin-left: 0.4rem;
-        }
-        .cu-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.1rem; }
-        .cu-group { margin-bottom: 1rem; padding-left: 0.8rem; border-left: 2px solid var(--border); }
-        .cu-group-name { font-weight: 600; font-size: 1rem; margin-bottom: 0.15rem; }
-        .cu-group-sum { font-size: 0.92rem; color: var(--text-sub); margin-bottom: 0.3rem; }
-        .dl-badge {
-            font-size: 0.75rem; font-weight: 600;
-            padding: 0.05rem 0.5rem; border-radius: 999px;
-            color: var(--info); background: var(--info-soft);
-        }
-        .dl-badge.missed { color: var(--accent-hover); background: var(--accent-soft); }
-        .cu-cal-day { margin-bottom: 0.7rem; }
-        .cu-cal-date { font-size: 0.85rem; font-weight: 600; color: var(--text-sub); margin-bottom: 0.2rem; }
-        .cu-cal-ev { font-size: 0.92rem; padding: 0.15rem 0; }
-        .cu-cal-time { display: inline-block; width: 5.5rem; color: var(--accent-hover); font-variant-numeric: tabular-nums; }
-
-        /* --- HEADER RIGHT GROUP: one row --- */
-        header { gap: 1rem; }
-        .header-right { display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; }
-
-        /* --- COMPACT LAYOUT (fixed ~960px DisplayFusion zone) --- */
+        /* --- NARROW WINDOWS (the ~960px DisplayFusion zone and below) --- */
         @media (max-width: 1100px) {
-            body { padding: 1.1rem 1.1rem 1.5rem; gap: 1rem; }
-            h1 { font-size: 1.5rem; white-space: nowrap; }
-            .sub-header { font-size: 0.88rem; }
-            .status-badge { margin-right: 0.6rem; }
-            .last-updated { margin-right: 0.6rem; }
-            .card { padding: 1rem 1.1rem; }
-            .tl-inner { margin: 0 0.9rem; }
-            .tabs { gap: 1.3rem; margin-bottom: 1rem; }
-            .inbox-columns { gap: 0.9rem; }
-            .panel { padding: 0.85rem; }
-            .email-card { padding: 0.85rem 0.95rem; }
-            .cu-banner { padding: 0.7rem 0.9rem; }
-            .cu-cards { gap: 0 0.9rem; }
-            .agenda-time { width: 8.5rem; }
+            body { padding: 1.2rem 1.2rem 2rem; gap: 1.1rem; }
+            h1 { font-size: 1.55rem; }
+            .card { padding: 1.1rem 1.2rem 1.3rem; }
         }
-
-        /* --- INBOX ASSISTANT --- */
-        .asst-fab {
-            position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 60;
-            width: 3.3rem; height: 3.3rem; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            background: var(--accent); color: #1f1e1d; border: none; cursor: pointer;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-            transition: transform 0.15s ease, background 0.15s ease;
+        @media (max-width: 700px) {
+            .todo-toolbar { flex-wrap: wrap; }
+            .todo-toolbar .input-prompt { flex-basis: 100%; }
         }
-        .asst-fab:hover { background: var(--accent-hover); transform: translateY(-1px); }
-        .asst-fab.open { background: var(--surface-2); color: var(--text-main); border: 1px solid var(--border-strong); }
-        .asst-panel {
-            position: fixed; right: 1.2rem; bottom: 5.1rem; z-index: 60;
-            width: min(27rem, calc(100vw - 2.4rem)); height: min(36rem, calc(100vh - 7rem));
-            display: flex; flex-direction: column;
-            background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.8rem;
-            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
-            overflow: hidden;
-        }
-        .asst-head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); }
-        .asst-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; }
-        .asst-head-btns { display: flex; gap: 0.35rem; }
-        .asst-icon-btn {
-            background: transparent; border: 1px solid var(--border); color: var(--text-sub);
-            border-radius: 0.35rem; padding: 0.15rem 0.55rem; font-size: 0.85rem; cursor: pointer;
-        }
-        .asst-icon-btn:hover { color: var(--text-main); border-color: var(--border-strong); }
-        .asst-log { flex: 1; overflow-y: auto; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; }
-        .asst-hint { color: var(--text-sub); font-size: 0.88rem; line-height: 1.5; }
-        .asst-hint em { color: var(--text-main); font-style: normal; }
-        .asst-msg { max-width: 92%; font-size: 0.92rem; line-height: 1.5; }
-        .asst-user { align-self: flex-end; background: var(--accent-soft); border: 1px solid rgba(217, 119, 87, 0.35); padding: 0.5rem 0.75rem; border-radius: 0.7rem 0.7rem 0.2rem 0.7rem; white-space: pre-wrap; }
-        .asst-bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); padding: 0.6rem 0.8rem; border-radius: 0.7rem 0.7rem 0.7rem 0.2rem; }
-        .asst-answer { white-space: pre-wrap; }
-        .asst-cite { font-size: 0.72rem; color: var(--info); vertical-align: super; margin-left: 1px; }
-        .asst-searched { margin-top: 0.45rem; font-size: 0.76rem; color: var(--text-faint); }
-        .asst-sources { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
-        .asst-src {
-            display: flex; gap: 0.5rem; align-items: baseline; text-align: left;
-            background: var(--inset); border: 1px solid var(--border); border-radius: 0.4rem;
-            padding: 0.35rem 0.55rem; color: var(--text-main); cursor: pointer; font-size: 0.82rem;
-        }
-        .asst-src:hover { border-color: var(--info); }
-        .asst-src-wrap { display: flex; flex-direction: column; }
-        .asst-src-wrap .asst-src { width: 100%; }
-        .asst-chips { margin: 0.3rem 0 0.1rem 0.4rem; }
-        .asst-chips .chip { font-size: 0.78rem; padding: 0.2rem 0.55rem; }
-        .asst-chips .chip span { max-width: 15rem; }
-        .asst-src-n { color: var(--info); font-weight: 600; flex-shrink: 0; }
-        .asst-src-subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-        .asst-src-meta { color: var(--text-faint); font-size: 0.75rem; flex-shrink: 0; }
-        .asst-choices { margin-top: 0.55rem; display: flex; flex-direction: column; gap: 0.35rem; }
-        .asst-choice {
-            text-align: left; background: var(--accent-soft); border: 1px solid rgba(217, 119, 87, 0.45);
-            color: var(--text-main); border-radius: 0.4rem; padding: 0.4rem 0.6rem; font-size: 0.84rem; cursor: pointer;
-        }
-        .asst-choice:hover { border-color: var(--accent); }
-        .asst-choice:disabled { opacity: 0.6; cursor: wait; }
-        .asst-choice-result { margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
-        .asst-pending { color: var(--text-sub); font-size: 0.88rem; }
-        .asst-confirm { margin-top: 0.55rem; padding: 0.55rem 0.65rem; border: 1px solid var(--border); border-radius: 0.45rem; display: flex; flex-direction: column; gap: 0.35rem; }
-        .asst-confirm-subj { font-weight: 600; }
-        .asst-confirm-meta { color: var(--text-sub); font-size: 0.8rem; }
-        .asst-confirm textarea { width: 100%; box-sizing: border-box; min-height: 2.4rem; resize: vertical; font: inherit; font-size: 0.84rem; color: var(--text-main); background: transparent; border: 1px solid var(--border); border-radius: 0.35rem; padding: 0.35rem 0.5rem; }
-        .asst-confirm-btns { display: flex; gap: 0.4rem; }
-        .asst-confirm-btns .asst-choice { flex: 1; text-align: center; }
-        .asst-confirm-btns .asst-choice.secondary { background: transparent; border-color: var(--border); }
-        .asst-pending::after { content: ''; display: inline-block; width: 1em; animation: asstDots 1.2s steps(4) infinite; overflow: hidden; vertical-align: bottom; }
-        @keyframes asstDots { 0% { width: 0; } 100% { width: 1.1em; } }
-        .asst-input-row { display: flex; gap: 0.5rem; align-items: flex-end; padding: 0.7rem; border-top: 1px solid var(--border); }
-        .asst-input-row textarea { resize: none; max-height: 8rem; overflow-y: auto; }
     </style>
 </head>
 <body>
 
     <header>
         <div>
-            <h1>Daily Briefing & Executive Timeline</h1>
+            <h1>Daily Briefing</h1>
             <div class="sub-header" id="headerDate">Loading date...</div>
         </div>
         <div class="header-right">
-            <span class="last-updated" id="lastUpdated"></span>
-            <span class="status-badge"><span class="status-dot"></span>Connected to Desktop Outlook</span>
-            <button class="btn-refresh" onclick="fetchData()">Refresh Data</button>
+            <span class="last-updated" id="asstStatus"></span>
         </div>
     </header>
 
-    <div class="limit-note" id="limitNote" style="display:none;"></div>
-
-    <div class="inv-bar" id="inviteBar" style="display:none;"></div>
-
-    <div class="cu-banner" id="catchupBanner" style="display:none;">
-        <span id="cuBannerText"></span>
-        <div class="cu-banner-btns">
-            <button class="btn-action" onclick="startCatchupFromBanner()">Catch me up</button>
-            <button class="btn-refresh" onclick="dismissBanner()">Dismiss</button>
-        </div>
-    </div>
-
-    <!-- Timeline and tabs stay pinned at the top while the page scrolls -->
     <div class="sticky-top">
-    <div class="card">
-        <div class="tl-head">
-            <div class="card-title">Today's Timeline</div>
-            <div class="tl-allday" id="allDayContainer"></div>
-            <div class="tl-status" id="tlStatus"></div>
-        </div>
-        <div class="tl-inner" id="timelineBox">
-            <div class="tl-labels" id="tlLabels"></div>
-            <div class="tl-lanes" id="tlLanes"></div>
-            <div class="tl-axis-zone" id="tlAxisZone">
-                <div class="tl-axis"></div>
-            </div>
-            <div class="now-line" id="nowLine"></div>
-        </div>
-    </div>
         <div class="tabs">
-            <div class="tab active" data-tab="inbox" onclick="switchTab('inbox')">Inbox</div>
-            <div class="tab" data-tab="notes" onclick="switchTab('notes')">Running Notes</div>
-            <div class="tab" data-tab="tomorrow" onclick="switchTab('tomorrow')">Tomorrow's Agenda</div>
-            <div class="tab" data-tab="catchup" onclick="switchTab('catchup')">Catch-up</div>
+            <div class="tab active" data-tab="notes" onclick="switchTab('notes')">To-do</div>
+            <div class="tab" data-tab="jot" onclick="switchTab('jot')">Notes</div>
+            <div class="tab" data-tab="streams" onclick="switchTab('streams')">Streams</div>
         </div>
     </div>
 
     <div>
-
-        <!-- TAB 1: INBOX -->
-        <div id="tab-inbox" class="inbox-columns">
-            <div class="panel panel-req">
-                <div class="panel-header">⚡ Requires Response</div>
-                <div id="reqContainer">Loading emails...</div>
-            </div>
-            <div class="panel panel-fyi">
-                <div class="panel-header">FYI / Reading</div>
-                <div id="fyiContainer">Loading emails...</div>
-                <div id="noiseContainer"></div>
-            </div>
-        </div>
-
         <!-- TAB 2: RUNNING NOTES -->
-        <div id="tab-notes" class="card" style="display: none;">
-            <div class="card-title">Running Notes & Tasks</div>
+        <div id="tab-notes" class="card">
             <div class="todo-toolbar">
                 <input type="text" id="newTodo" class="input-prompt" placeholder="Add a task and press Enter..." onkeydown="if (event.key === 'Enter') addTodo()">
+                <input type="date" id="newTodoDue" class="todo-due-input todo-new-due" title="Due date (optional)">
                 <button class="btn-action" onclick="addTodo()">Add</button>
                 <button class="btn-refresh" onclick="clearCompleted()">Clear completed</button>
             </div>
             <div id="todoList" class="muted">Loading tasks...</div>
         </div>
 
-        <!-- TAB 4: CATCH-UP -->
-        <div id="tab-catchup" class="card" style="display: none;">
-            <div class="cu-head">
-                <div class="card-title" style="margin-bottom:0;">Catch-up</div>
-                <div class="cu-controls">
-                    <label class="muted" for="cuSince">Everything since</label>
-                    <input type="date" id="cuSince" class="input-prompt cu-date">
-                    <button class="btn-action" id="cuRun" onclick="startCatchup()">Run catch-up</button>
+        <!-- NOTES: pages (General plus one per topic); the assistant files quick notes and meeting notes here, newest on top -->
+        <div id="tab-jot" class="card" style="display: none;">
+            <div class="jot-wrap">
+                <div class="jot-main">
+                    <!-- One fixed toolbar: page picker, actions, save status. The text box always gets the full width. -->
+                    <div class="jot-bar">
+                        <select id="jotSelect" class="jot-select" title="Note page"></select>
+                        <button class="btn-refresh" id="jotNew">+ New page</button>
+                        <button class="jot-link" id="jotRename" style="display:none;">Rename</button>
+                        <button class="jot-link" id="jotRemove" style="display:none;">Remove</button>
+                        <button class="btn-refresh" id="jotAiToggle" title="Edit or brainstorm with Claude">Ask Claude</button>
+                        <span class="muted jot-status" id="jotStatus"></span>
+                    </div>
+                    <div id="jotList" style="display:none;"></div><div id="jotTitle" style="display:none;"></div>
+                    <!-- Inline name box / confirm row (this window blocks prompt() and confirm()) -->
+                    <div class="jot-ask" id="jotAsk" style="display:none;">
+                        <span id="jotAskLabel"></span>
+                        <input type="text" id="jotAskInput" class="input-prompt" maxlength="40">
+                        <button class="btn-action" id="jotAskOk">OK</button>
+                        <button class="btn-refresh" id="jotAskCancel">Cancel</button>
+                    </div>
+                    <textarea id="jotText" class="jot-text" spellcheck="true" placeholder="Type anything. Saves as you go. Notes from the assistant (note: ... and end notes) land here too, newest on top."></textarea>
                 </div>
+                <aside class="jot-ai" id="jotAi">
+                    <div class="ai-head"><span>Claude</span><span class="ai-sel" id="aiSel"></span></div>
+                    <div class="ai-log" id="aiLog"><div class="ai-empty" id="aiEmpty">Select text and say what to change ("tighten this", "make it a list"), or ask for ideas about the page. Edits replace the selection and can be undone.</div></div>
+                    <div class="ai-form">
+                        <textarea id="aiIn" class="ai-in" placeholder="Ask or instruct. Enter sends, Shift+Enter adds a line."></textarea>
+                        <div class="ai-row"><button class="btn-action" id="aiSend">Send</button><button class="jot-link" id="aiClear">Clear chat</button><span class="muted jot-status" id="aiStatus"></span></div>
+                    </div>
+                </aside>
             </div>
-            <div id="cuStatus" class="muted" style="margin-top:0.6rem;"></div>
-            <div class="cu-progress" id="cuProgress" style="display:none;"><div class="cu-bar" id="cuBar"></div></div>
-            <div id="cuResult"></div>
         </div>
 
-        <!-- TAB 3: TOMORROW'S AGENDA -->
-        <div id="tab-tomorrow" class="card" style="display: none;">
-            <div class="card-title" id="tomorrowTitle">Tomorrow's Calendar Overview</div>
-            <div id="tomorrowContainer">Loading tomorrow's schedule...</div>
-        </div>
-    </div>
-
-    <!-- INBOX ASSISTANT -->
-    <button class="asst-fab" id="asstFab" onclick="toggleAssistant()" title="Ask your inbox (Ctrl+K)">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5.1A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg>
-    </button>
-    <div class="asst-panel" id="asstPanel" style="display:none;">
-        <div class="asst-head">
-            <span class="asst-title">Ask your inbox</span>
-            <span class="asst-head-btns">
-                <button class="asst-icon-btn" onclick="clearAssistant()" title="New conversation">New</button>
-                <button class="asst-icon-btn" onclick="toggleAssistant()" title="Close (Esc)">&times;</button>
-            </span>
-        </div>
-        <div class="asst-log" id="asstLog">
-            <div class="asst-hint">Searches your Inbox, its subfolders, and Sent Items (not Deleted or Archived). Name a person, a topic, or a time frame. It can also open a new email draft, or set up, move, or cancel meetings. Everything opens in Outlook for you to send.<br><br>Try: <em>What did Alex and I decide about the budget?</em>, <em>What did Jordan announce last week?</em>, <em>Email Sam asking for the report by Friday</em>, <em>Set up 30 min with Dana on Tuesday at 2</em>, or <em>When are Sam and I both free next week?</em></div>
-        </div>
-        <div class="asst-input-row">
-            <textarea id="asstInput" class="input-prompt" rows="1" placeholder="Ask about your email, or ask for a new draft...  (Enter)" oninput="autoGrow(this)" onkeydown="asstKeys(event)"></textarea>
-            <button class="btn-action" id="asstSend" onclick="askAssistant()">Ask</button>
+        <!-- STREAMS: work pipeline from OneDrive root\_admin\streams.json -->
+        <div id="tab-streams" class="card" style="display: none;">
+            <div class="jot-bar">
+                <div class="card-title" style="margin-bottom:0;">Streams</div>
+                <button class="jot-link" id="stReload">Reload</button>
+                <span class="muted jot-status" id="stStatus"></span>
+            </div>
+            <div class="st-tiles" id="stTiles"></div>
+            <div class="st-chips" id="stChips"></div>
+            <div id="stActive"></div>
+            <div class="st-section" id="stIdeasSec" style="display:none;">
+                <div class="st-group">Ideas <button class="jot-link" id="stIdeaNew">+ Note an idea</button></div>
+                <div class="st-ideaform" id="stIdeaForm" style="display:none;">
+                    <input type="text" id="stIdeaTitle" class="input-prompt" placeholder="Idea">
+                    <select id="stIdeaType" class="jot-select st-sel"><option value="paper">Paper</option><option value="report">Report</option><option value="whitepaper">White paper</option><option value="software">Software</option></select>
+                    <input type="text" id="stIdeaNote" class="input-prompt" placeholder="Note (optional)">
+                    <button class="btn-action" id="stIdeaSave">Save</button><button class="btn-refresh" id="stIdeaCancel">Cancel</button>
+                </div>
+                <div id="stIdeas"></div>
+            </div>
+            <details class="st-section"><summary class="st-group">Completed (<span id="stDoneCount">0</span>)</summary><div id="stDone"></div></details>
+            <details class="st-section"><summary class="st-group">Shelved (<span id="stShelvedCount">0</span>)</summary><div id="stShelved"></div></details>
         </div>
     </div>
 
@@ -835,57 +375,8 @@
     </div>
 
     <script>
-        const START_HOUR = 8;
-        const END_HOUR = 18;
-        const TOTAL_HOURS = END_HOUR - START_HOUR;
-
         document.getElementById('headerDate').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
 
-        let tlMeetings = [];
-        const fmtDur = ms => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60 ? (m % 60) + 'm' : ''}`.trim(); };
-
-        // Past meetings fade, the current one glows, and the header says what's on now or next
-        function updateMeetingStates() {
-            const now = Date.now();
-            document.querySelectorAll('#timelineBox [data-end]').forEach(el => {
-                const s = +el.dataset.start, e = +el.dataset.end;
-                el.classList.toggle('past', e <= now);
-                el.classList.toggle('current', s <= now && now < e);
-            });
-            const status = document.getElementById('tlStatus');
-            if (!tlMeetings.length) { status.innerHTML = ''; return; }
-            const current = tlMeetings.filter(m => m.start <= now && now < m.end);
-            if (current.length) {
-                const soonest = Math.min(...current.map(m => m.end));
-                status.innerHTML = `Now: <b>${current.map(m => esc(m.subject)).join(', ')}</b> · ${fmtDur(soonest - now)} left`;
-                status.title = status.innerText;
-                return;
-            }
-            const next = tlMeetings.filter(m => m.start > now).sort((a, b) => a.start - b.start)[0];
-            status.innerHTML = next
-                ? `Next: <b>${esc(next.subject)}</b> at ${fmtTime(new Date(next.start))} · in ${fmtDur(next.start - now)}`
-                : 'No more meetings today';
-            status.title = status.innerText;
-        }
-
-        function updateNowLine() {
-            updateMeetingStates();
-            const now = new Date();
-            const currentHour = now.getHours() + (now.getMinutes() / 60);
-            const line = document.getElementById('nowLine');
-            
-            if (currentHour >= START_HOUR && currentHour <= END_HOUR) {
-                const pct = ((currentHour - START_HOUR) / TOTAL_HOURS) * 100;
-                line.style.left = pct + '%';
-                line.style.display = 'block';
-            } else {
-                line.style.display = 'none';
-            }
-        }
-
-        let refreshing = false, lastMail = null, refreshDue = 0, failStreak = 0;
-
-        // Page errors go to data\server.log so they can be diagnosed later
         function reportError(where, err) {
             try {
                 navigator.sendBeacon('http://localhost:8000/api/clientlog',
@@ -895,57 +386,6 @@
         window.addEventListener('error', e => reportError('page', e.error || e.message));
         window.addEventListener('unhandledrejection', e => reportError('promise', e.reason));
 
-        function showClaudeLimit(msg) {
-            const n = document.getElementById('limitNote');
-            if (!msg) { n.style.display = 'none'; return; }
-            n.innerHTML = `<b>Claude usage limit reached.</b> ${esc(msg)}. New emails show without summaries, and the chat assistant is paused until then.`;
-            n.style.display = '';
-        }
-        async function fetchData() {
-            if (refreshing) return;
-            refreshing = true;
-            refreshDue = 0;
-            // Live elapsed counter so a slow refresh never looks frozen
-            const t0 = Date.now();
-            const tick = () => {
-                const s = Math.round((Date.now() - t0) / 1000);
-                const msg = s < 5 ? 'Reading Outlook...' : `Summarizing emails with Claude... ${s}s`;
-                document.getElementById('lastUpdated').innerText = msg;
-                ['reqContainer', 'fyiContainer'].forEach(id => {
-                    const c = document.getElementById(id);
-                    if (c.dataset.loading === '1' || /^Loading emails/.test(c.innerText)) { c.dataset.loading = '1'; c.innerHTML = `<div class="muted">${msg}</div>`; }
-                });
-            };
-            tick();
-            const ticker = setInterval(tick, 1000);
-            try {
-                const res = await fetch('http://localhost:8000/api/data');
-                const data = await res.json();
-                if (!res.ok || data.error) throw new Error(data.message || 'Outlook is not ready yet');
-                clearInterval(ticker);
-                ['reqContainer', 'fyiContainer'].forEach(id => delete document.getElementById(id).dataset.loading);
-                renderTimeline(data.calendar || []);
-                renderEmails(data.emails);
-                renderTomorrow(data.tomorrow || [], data.tomorrowDate);
-                updateCatchupBanner(data.catchup);
-                if (data.changes) { lastMail = data.changes.Mail; renderInvites(data.changes.Invites); }
-                showClaudeLimit(data.claudeLimit);
-                failStreak = 0;
-                document.getElementById('lastUpdated').innerText = 'Updated ' + fmtTime(new Date());
-            } catch (err) {
-                clearInterval(ticker);
-                const lu = document.getElementById('lastUpdated');
-                lu.innerText = /Outlook/.test(err.message) ? 'Outlook not ready, click Refresh Data' : 'Refresh failed';
-                lu.title = err.message;
-                console.error("Fetch error:", err);
-                reportError('fetchData', err);
-                // Retry on its own a few times (e.g. the server was still starting)
-                if (++failStreak <= 3) refreshDue = Date.now() + 20000;
-                document.getElementById('tomorrowContainer').innerHTML = '<div class="muted">Could not reach the local server.</div>';
-            }
-            refreshing = false;
-        }
-
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
@@ -954,617 +394,8 @@
             return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
         }
 
-        function renderTomorrow(events, dateStr) {
-            const c = document.getElementById('tomorrowContainer');
-            if (dateStr) {
-                const d = new Date(dateStr + 'T00:00:00');
-                document.getElementById('tomorrowTitle').innerText =
-                    'Agenda for ' + d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-            }
-            if (!events.length) {
-                c.innerHTML = '<div class="muted">No events scheduled.</div>';
-                return;
-            }
-            c.innerHTML = events.map(ev => {
-                const s = new Date(ev.Start), e = new Date(ev.End);
-                const time = ev.AllDay ? 'All day' : `${fmtTime(s)} - ${fmtTime(e)}`;
-                const loc = ev.Location ? `<div class="agenda-loc">${esc(ev.Location)}</div>` : '';
-                return `<div class="agenda-row"><div class="agenda-time">${time}</div><div><div class="agenda-subject">${esc(ev.Subject)}</div>${loc}</div></div>`;
-            }).join('');
-        }
-
-        // --- TIMELINE: flat axis, segments on the line, width-matched labels above ---
-        const LABEL_GAP = 6;   // px between stacked label lanes and above the axis
-        const LANE_H = 16;     // px per extra Gantt row for overlapping meetings
-        const hourOf = d => d.getHours() + d.getMinutes() / 60;
-        const hourLabel = h => (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? ' AM' : ' PM');
-
-        function buildAxis() {
-            const zone = document.getElementById('tlAxisZone');
-            zone.querySelectorAll('.tl-tick, .tl-tick-label').forEach(n => n.remove());
-            for (let h = START_HOUR; h <= END_HOUR; h++) {
-                const pct = ((h - START_HOUR) / TOTAL_HOURS) * 100;
-                const tick = document.createElement('div');
-                tick.className = 'tl-tick';
-                tick.style.left = pct + '%';
-                const lbl = document.createElement('div');
-                lbl.className = 'tl-tick-label';
-                lbl.style.left = pct + '%';
-                lbl.innerText = hourLabel(h);
-                zone.appendChild(tick);
-                zone.appendChild(lbl);
-            }
-        }
-
-        function renderTimeline(events) {
-            const labels = document.getElementById('tlLabels');
-            const zone = document.getElementById('tlAxisZone');
-            const allDay = document.getElementById('allDayContainer');
-            labels.innerHTML = '';
-            zone.querySelectorAll('.tl-seg').forEach(n => n.remove());
-            allDay.innerHTML = '';
-
-            const timed = [];
-            events.forEach(ev => {
-                if (ev.AllDay) {
-                    allDay.insertAdjacentHTML('beforeend', `<span class="tl-chip">All day: ${esc(ev.Subject)}</span>`);
-                    return;
-                }
-                const start = new Date(ev.Start), end = new Date(ev.End);
-                const s = Math.max(hourOf(start), START_HOUR);
-                const e = Math.min(hourOf(end), END_HOUR);
-                if (e > START_HOUR && s < END_HOUR && e > s) timed.push({ ev, start, end, s, e });
-            });
-
-            // Meetings under 30 minutes get no label; hover the segment for the title
-            const MIN_LABEL_MINUTES = 30;
-            timed.forEach(t => { t.showLabel = (t.end - t.start) / 60000 >= MIN_LABEL_MINUTES; });
-
-            timed.sort((a, b) => a.s - b.s);
-
-            // Gantt rows: a meeting that overlaps an earlier one moves up a row (row 0 = on the axis)
-            const rowEnd = [];
-            timed.forEach(t => {
-                let r = rowEnd.findIndex(end => end <= t.s + 1e-9);
-                if (r === -1) { r = rowEnd.length; rowEnd.push(0); }
-                rowEnd[r] = t.e;
-                t.row = r;
-            });
-            const lanesBox = document.getElementById('tlLanes');
-            lanesBox.innerHTML = '';
-            lanesBox.style.height = (Math.max(0, rowEnd.length - 1) * LANE_H) + 'px';
-
-            timed.forEach(t => {
-                const left = ((t.s - START_HOUR) / TOTAL_HOURS) * 100;
-                const width = ((t.e - t.s) / TOTAL_HOURS) * 100;
-                const tip = `${t.ev.Subject}\n${fmtTime(t.start)} - ${fmtTime(t.end)}`;
-
-                const seg = document.createElement('div');
-                seg.className = 'tl-seg';
-                seg.dataset.start = t.start.getTime();
-                seg.dataset.end = t.end.getTime();
-                seg.style.left = left + '%';
-                seg.style.width = width + '%';
-                seg.title = tip;
-                if (t.row === 0) {
-                    zone.appendChild(seg);
-                } else {
-                    seg.style.bottom = ((t.row - 1) * LANE_H + 2) + 'px';
-                    lanesBox.appendChild(seg);
-                }
-                if (!t.showLabel) return;
-
-                const lbl = document.createElement('div');
-                lbl.className = 'tl-label';
-                lbl.dataset.segLeft = left;     // % of axis width
-                lbl.dataset.segWidth = width;   // % of axis width
-                lbl.dataset.row = t.row;        // Gantt row of its segment
-                lbl.dataset.start = t.start.getTime();
-                lbl.dataset.end = t.end.getTime();
-                lbl.title = tip;
-                lbl.innerText = t.ev.Subject;
-                labels.appendChild(lbl);
-            });
-
-            tlMeetings = timed.map(t => ({ subject: t.ev.Subject, start: t.start.getTime(), end: t.end.getTime() }));
-            layoutLabels();
-            updateNowLine();
-        }
-
-        // Label layout: each label is as wide as its title needs (between the segment width and a cap),
-        // labels that would overlap on screen stack into rows, and a leader line ties each one to its segment.
-        function layoutLabels() {
-            const labels = document.getElementById('tlLabels');
-            labels.querySelectorAll('.tl-leader').forEach(n => n.remove());
-            const items = [...labels.querySelectorAll('.tl-label')];
-            if (!items.length) { labels.style.height = '0.5rem'; return; }
-
-            const W = labels.clientWidth;
-            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-            const maxW = Math.min(13 * rem, W);
-            const H_GAP = 6;
-
-            // 1. Width and horizontal position
-            const boxes = items.map(l => {
-                const segL = +l.dataset.segLeft / 100 * W;
-                const segW = +l.dataset.segWidth / 100 * W;
-                l.classList.add('measuring');
-                const natural = Math.ceil(l.getBoundingClientRect().width) + 4;   // fractional width incl. border, plus a margin
-                l.classList.remove('measuring');
-                const w = Math.min(Math.max(segW, natural), maxW);
-                let x = segL;
-                if (x + w > W) x = Math.max(0, W - w);   // keep inside the card at the right edge
-                l.style.left = x + 'px';
-                l.style.width = w + 'px';
-                return { l, x, w, anchor: segL + Math.min(segW / 2, 10) };
-            });
-
-            // 2. Rows: first row where the label fits without touching its neighbor
-            boxes.sort((a, b) => a.x - b.x);
-            const rowEnds = [];
-            boxes.forEach(b => {
-                let row = rowEnds.findIndex(end => end + H_GAP <= b.x);
-                if (row === -1) { row = rowEnds.length; rowEnds.push(0); }
-                rowEnds[row] = b.x + b.w;
-                b.row = row;
-            });
-
-            // 3. Vertical stacking by measured heights
-            const rowH = [];
-            boxes.forEach(b => { rowH[b.row] = Math.max(rowH[b.row] || 0, b.l.offsetHeight); });
-            const bottoms = [];
-            let acc = LABEL_GAP + 4;
-            rowH.forEach((hgt, i) => { bottoms[i] = acc; acc += (hgt || 0) + LABEL_GAP; });
-            boxes.forEach(b => { b.l.style.bottom = bottoms[b.row] + 'px'; });
-            labels.style.height = acc + 'px';
-
-            // 4. Leader lines from each label down to the top of its segment (on the axis or in its Gantt row)
-            const lanesH = document.getElementById('tlLanes').offsetHeight;
-            boxes.forEach(b => {
-                const segRow = +b.l.dataset.row || 0;
-                const drop = segRow === 0 ? lanesH + 0.75 * rem - 5 : lanesH - ((segRow - 1) * LANE_H + 14);
-                const ln = document.createElement('div');
-                ln.className = 'tl-leader';
-                ln.dataset.start = b.l.dataset.start;
-                ln.dataset.end = b.l.dataset.end;
-                ln.style.left = Math.round(b.anchor) + 'px';
-                ln.style.bottom = (-drop) + 'px';
-                ln.style.height = (bottoms[b.row] + drop) + 'px';
-                labels.appendChild(ln);
-            });
-            updateMeetingStates();
-        }
-
-        window.addEventListener('resize', layoutLabels);
-        buildAxis();
-
-        function renderEmails(payload) {
-            const reqCont = document.getElementById('reqContainer');
-            const fyiCont = document.getElementById('fyiContainer');
-            reqCont.innerHTML = ''; fyiCont.innerHTML = '';
-
-            // AI formatting safety net
-            let emails = [];
-            if (Array.isArray(payload)) {
-                emails = payload;
-            } else if (payload && Array.isArray(payload.emails)) {
-                emails = payload.emails;
-            } else if (payload && typeof payload === 'object') {
-                // Find any internal array if nested deeply
-                emails = Object.values(payload).find(val => Array.isArray(val)) || [payload];
-            }
-
-            if (!emails || emails.length === 0) {
-                reqCont.innerHTML = '<div class="muted">No unread response items.</div>';
-                fyiCont.innerHTML = '<div class="muted">No unread FYI items.</div>';
-                document.getElementById('noiseContainer').innerHTML = '';
-                return;
-            }
-
-            emails = emails.filter(i => !wasCleared(i));
-            const noise = emails.filter(i => i.Category === 'Noise');
-            const shown = emails.filter(i => i.Category !== 'Noise' && (i.Subject || i.CleanSubject));
-            shown.forEach(item => {
-                let card;
-                try { card = buildCard(item); }
-                catch (err) {
-                    // One bad card must not blank the whole inbox
-                    reportError('buildCard failed for "' + (item.CleanSubject || '') + '"', err);
-                    card = document.createElement('div');
-                    card.className = 'email-card';
-                    card.innerHTML = `<div class="muted">${esc(item.CleanSubject || 'Email')} could not be displayed. <button class="btn-refresh" onclick="handleOpen('${esc((item.Ids || [])[0] || '')}', this)">Open in Outlook</button></div>`;
-                }
-                const isReq = item.Category === 'Requires Response';
-                if (isReq) reqCont.appendChild(card);
-                else fyiCont.appendChild(card);
-            });
-            if (!reqCont.children.length) reqCont.innerHTML = '<div class="muted">No unread response items.</div>';
-            if (!fyiCont.children.length) fyiCont.innerHTML = '<div class="muted">No unread FYI items.</div>';
-            renderNoiseBox(document.getElementById('noiseContainer'), noise);
-        }
-
-        // Compact one-line row; click it to expand the full card
-        function compactRow(item, note) {
-            const row = document.createElement('div');
-            row.className = 'cu-row';
-            row.dataset.ids = JSON.stringify((item.Ids || []).filter(Boolean));
-            const n = (item.Messages || []).length;
-            const meta = [item.From, fmtReceived(item.LatestReceived), n > 1 ? n + ' messages' : ''].filter(Boolean).join('  ·  ');
-            row.innerHTML = `
-                <div class="cu-row-main" onclick="toggleRow(this)">
-                    <div class="cu-row-top"><span class="cu-subj">${esc(item.CleanSubject || item.Subject || 'Email')}</span><span class="cu-meta">${esc(meta)}</span></div>
-                    <div class="cu-task">${esc(note != null ? note : (item.ActionTask || ''))}</div>
-                </div>
-                <div class="cu-row-btns">
-                    <button class="btn-take-action" onclick="handleOpen('${esc((item.Ids || [])[0] || '')}', this)">Open</button>
-                    <button class="btn-take-action btn-clear" onclick="clearRow(this)">Clear</button>
-                </div>
-                <div class="cu-expand" style="display:none;"></div>`;
-            row._item = item;
-            return row;
-        }
-
-        function toggleRow(el) {
-            const row = el.closest('.cu-row');
-            const box = row.querySelector('.cu-expand');
-            if (!box.children.length) box.appendChild(buildCard(row._item));
-            box.style.display = box.style.display === 'none' ? 'block' : 'none';
-            row.classList.toggle('open', box.style.display === 'block');
-        }
-
-        // Message IDs you cleared. A refresh that was already running when you clicked Clear
-        // (or a slow Outlook sync) can never bring those cards back.
-        const CLEARED_KEY = 'clearedIds';
-        function loadCleared() {
-            try {
-                const o = JSON.parse(lsGet(CLEARED_KEY) || '{}');
-                const cutoff = Date.now() - 2 * 86400000;
-                Object.keys(o).forEach(k => { if (o[k] < cutoff) delete o[k]; });
-                return o;
-            } catch (e) { return {}; }
-        }
-        let clearedIds = loadCleared();
-        function rememberCleared(ids) {
-            const now = Date.now();
-            (ids || []).forEach(id => { if (id) clearedIds[id] = now; });
-            lsSet(CLEARED_KEY, JSON.stringify(clearedIds));
-        }
-        const wasCleared = item => (item.Ids || []).some(id => clearedIds[id]);
-
-        async function markRead(ids) {
-            if (!ids.length) return true;
-            const r = await postJson('/api/markread', { Ids: ids });
-            if (r.status === 'success') rememberCleared(ids);
-            return r.status === 'success';
-        }
-
-        async function clearRow(btn) {
-            const row = btn.closest('.cu-row');
-            btn.innerText = 'Clearing...';
-            if (!(await markRead(JSON.parse(row.dataset.ids || '[]')))) { btn.innerText = 'Error'; return; }
-            const box = row.closest('.noise-box');
-            row.classList.add('clearing');
-            setTimeout(() => { row.remove(); forgetCleared(row.dataset.ids); if (box) updateNoiseCount(box); }, 260);
-        }
-
-        // "Filtered out" box: Other tab, newsletters, insurance/IRA notices, society mailings
-        function renderNoiseBox(container, items) {
-            container.innerHTML = '';
-            if (!items.length) return;
-            const box = document.createElement('details');
-            box.className = 'noise-box';
-            box.innerHTML = `<summary><span class="noise-title">Filtered out <span class="noise-count"></span></span>
-                <button class="btn-take-action" onclick="event.preventDefault(); clearAllNoise(this)">Mark all read</button></summary><div class="noise-list"></div>`;
-            const list = box.querySelector('.noise-list');
-            items.forEach(it => list.appendChild(compactRow(it, it.NoiseReason ? `${it.NoiseReason}: ${it.ActionTask || ''}` : it.ActionTask)));
-            container.appendChild(box);
-            updateNoiseCount(box);
-        }
-
-        function updateNoiseCount(box) {
-            const n = box.querySelectorAll('.cu-row').length;
-            box.querySelector('.noise-count').innerText = `(${n})`;
-            if (!n) box.remove();
-        }
-
-        async function clearAllNoise(btn) {
-            const box = btn.closest('.noise-box');
-            const ids = [...box.querySelectorAll('.cu-row')].flatMap(r => JSON.parse(r.dataset.ids || '[]'));
-            btn.innerText = 'Clearing...';
-            if (!(await markRead(ids))) { btn.innerText = 'Error'; return; }
-            box.querySelectorAll('.cu-row').forEach(r => forgetCleared(r.dataset.ids));
-            box.remove();
-        }
-
-        // ---------------- CATCH-UP ----------------
-        let cuPoll = null;
-        let cuLoaded = false;
-        let cuGenerated = null;
-
-        // After a Clear: drop every copy of that conversation from the rundown, and remember it
-        function forgetCleared(idsJson) {
-            document.querySelectorAll('#cuResult [data-ids]').forEach(el => {
-                if (el.dataset.ids === idsJson) (el.closest('.cu-row') || el).remove();
-            });
-            if (cuGenerated) {
-                const key = 'cuCleared:' + cuGenerated;
-                const list = JSON.parse(lsGet(key) || '[]');
-                if (!list.includes(idsJson)) { list.push(idsJson); lsSet(key, JSON.stringify(list)); }
-            }
-        }
-
         function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-
-        function updateCatchupBanner(info) {
-            const banner = document.getElementById('catchupBanner');
-            const since = document.getElementById('cuSince');
-            if (info && info.PrevSeen && !since.value) since.value = info.PrevSeen.slice(0, 10);
-            if (!since.value) { const d = new Date(); d.setDate(d.getDate() - 7); since.value = d.toISOString().slice(0, 10); }
-            if (!info || !info.Suggest || lsGet('cuDismissed') === info.PrevSeen) { banner.style.display = 'none'; return; }
-            const d = new Date(info.PrevSeen);
-            document.getElementById('cuBannerText').innerText =
-                `You've been away since ${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} (${info.AwayWeekdays} workdays). Want a full rundown of what you missed?`;
-            banner.dataset.prev = info.PrevSeen;
-            banner.style.display = 'flex';
-        }
-
-        function dismissBanner() {
-            const b = document.getElementById('catchupBanner');
-            lsSet('cuDismissed', b.dataset.prev || '');
-            b.style.display = 'none';
-        }
-
-        function startCatchupFromBanner() {
-            dismissBanner();
-            switchTab('catchup');
-            startCatchup();
-        }
-
-        async function startCatchup() {
-            const since = document.getElementById('cuSince').value;
-            if (!since) return;
-            const r = await postJson('/api/catchup/start', { Since: since });
-            if (r.status === 'started' || r.status === 'running') pollCatchup();
-            else setCuStatus('Could not start the catch-up: ' + (r.message || 'server error'));
-        }
-
-        function setCuStatus(text) { document.getElementById('cuStatus').innerText = text; }
-
-        async function pollCatchup() {
-            clearTimeout(cuPoll);
-            let s;
-            try { s = await (await fetch('http://localhost:8000/api/catchup/status', { cache: 'no-store' })).json(); }
-            catch (e) { cuPoll = setTimeout(pollCatchup, 5000); return; }
-            const bar = document.getElementById('cuProgress');
-            const run = document.getElementById('cuRun');
-            if (s.Status === 'running') {
-                run.disabled = true;
-                bar.style.display = 'block';
-                document.getElementById('cuBar').style.width = (s.Total ? Math.max(4, 100 * s.Done / s.Total) : 4) + '%';
-                setCuStatus(`${s.Stage}...  This runs in the background, so you can keep using the other tabs.`);
-                cuPoll = setTimeout(pollCatchup, 3000);
-            } else {
-                run.disabled = false;
-                bar.style.display = 'none';
-                if (s.Status === 'error') setCuStatus('Catch-up failed: ' + s.Error);
-                if (s.Status === 'done') { cuLoaded = false; loadCatchupResult(); }
-            }
-        }
-
-        async function loadCatchupResult() {
-            if (cuLoaded) return;
-            let r = null;
-            try { r = await (await fetch('http://localhost:8000/api/catchup/result', { cache: 'no-store' })).json(); } catch (e) {}
-            if (!r) { if (!document.getElementById('cuStatus').innerText) setCuStatus('No catch-up yet. Pick a start date and run one.'); return; }
-            cuLoaded = true;
-            renderCatchup(r);
-        }
-
-        function cuSection(title, count, extraClass) {
-            const sec = document.createElement('section');
-            sec.className = 'cu-section ' + (extraClass || '');
-            sec.innerHTML = `<h3 class="cu-h">${esc(title)}${count != null ? `<span class="cu-count">${count}</span>` : ''}</h3>`;
-            return sec;
-        }
-
-        function renderCatchup(r) {
-            const out = document.getElementById('cuResult');
-            out.innerHTML = '';
-            cuGenerated = r.GeneratedAt;
-            const cleared = new Set(JSON.parse(lsGet('cuCleared:' + r.GeneratedAt) || '[]'));
-            const byKey = {};
-            (r.Items || []).forEach(i => { if (!cleared.has(JSON.stringify((i.Ids || []).filter(Boolean)))) byKey[i.Key] = i; });
-            const get = keys => (keys || []).map(k => byKey[k]).filter(Boolean);
-            const gen = new Date(r.GeneratedAt);
-            const since = new Date(r.Since + 'T00:00:00');
-            setCuStatus(`Covers everything since ${since.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}. Generated ${gen.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${fmtTime(gen)}.`);
-
-            if (r.Overview) {
-                const ov = document.createElement('div');
-                ov.className = 'cu-overview';
-                ov.innerText = r.Overview;
-                out.appendChild(ov);
-            }
-            const c = r.Counts || {};
-            const counts = document.createElement('div');
-            counts.className = 'cu-stats';
-            counts.innerText = `${c.Scanned || 0} emails scanned  ·  ${c.Conversations || 0} conversations  ·  ${c.AlreadyAnswered || 0} you already answered were skipped`;
-            out.appendChild(counts);
-
-            // Needs you now: full cards
-            const needs = get(r.NeedsYou);
-            const needSet = new Set(needs.map(i => i.Key));
-            const s1 = cuSection('Needs you now', needs.length, 'cu-needs');
-            const grid = document.createElement('div');
-            grid.className = 'cu-cards';
-            grid.dataset.empty = 'All caught up.';
-            needs.forEach(i => grid.appendChild(buildCard(i)));
-            if (!needs.length) grid.innerHTML = '<div class="muted">Nothing is waiting on you.</div>';
-            s1.appendChild(grid);
-            out.appendChild(s1);
-
-            // Deadlines
-            const dls = (r.Deadlines || []).filter(d => byKey[d.Key]);
-            if (dls.length) {
-                const s = cuSection('Deadlines', dls.length);
-                dls.forEach(d => {
-                    const i = byKey[d.Key];
-                    const dd = new Date(d.Date + 'T00:00:00');
-                    const row = compactRow(i, d.Note || i.ActionTask);
-                    row.querySelector('.cu-row-top').insertAdjacentHTML('afterbegin',
-                        `<span class="dl-badge ${d.Missed ? 'missed' : ''}">${d.Missed ? 'Missed ' : 'Due '}${dd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`);
-                    s.appendChild(row);
-                });
-                out.appendChild(s);
-            }
-
-            // By project
-            const projects = (r.Projects || []).filter(pg => get(pg.Keys).length);
-            if (projects.length) {
-                const s = cuSection('By project', null);
-                projects.forEach(pg => {
-                    const g = document.createElement('div');
-                    g.className = 'cu-group';
-                    g.innerHTML = `<div class="cu-group-name">${esc(pg.Name)}<span class="cu-count">${get(pg.Keys).length}</span></div>${pg.Summary ? `<div class="cu-group-sum">${esc(pg.Summary)}</div>` : ''}`;
-                    get(pg.Keys).forEach(i => {
-                        const row = compactRow(i);
-                        const tag = needSet.has(i.Key) ? '<span class="dl-badge missed">Needs you</span>' : (i.Resolved ? '<span class="dl-badge">Resolved</span>' : '');
-                        if (tag) row.querySelector('.cu-row-top').insertAdjacentHTML('beforeend', tag);
-                        g.appendChild(row);
-                    });
-                    s.appendChild(g);
-                });
-                out.appendChild(s);
-            }
-
-            const simple = (title, keys) => {
-                const items = get(keys);
-                if (!items.length) return;
-                const s = cuSection(title, items.length);
-                items.forEach(i => s.appendChild(compactRow(i)));
-                out.appendChild(s);
-            };
-            simple('Resolved without you', r.Resolved);
-
-            const noise = get(r.Noise);
-            if (noise.length) {
-                const s = cuSection('Filtered', null);
-                const holder = document.createElement('div');
-                s.appendChild(holder);
-                renderNoiseBox(holder, noise);
-                out.appendChild(s);
-            }
-
-            // Calendar
-            const cal = r.Calendar || {};
-            const calDays = (title, days) => {
-                days = days || [];
-                if (!days.length) return;
-                const s = cuSection(title, null);
-                days.forEach(day => {
-                    const d = new Date(day.Date + 'T00:00:00');
-                    const g = document.createElement('div');
-                    g.className = 'cu-cal-day';
-                    g.innerHTML = `<div class="cu-cal-date">${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>` +
-                        (day.Events || []).map(ev => `<div class="cu-cal-ev"><span class="cu-cal-time">${ev.AllDay ? 'All day' : fmtTime(new Date(ev.Start))}</span>${esc(ev.Subject)}</div>`).join('');
-                    s.appendChild(g);
-                });
-                out.appendChild(s);
-            };
-            calDays('Meetings while you were away', cal.Missed);
-            calDays('Coming week', cal.Upcoming);
-        }
-
-        // One email card (used by the Inbox tab and the Catch-up tab)
-        // The server can send a one-item list as a bare value; always treat these fields as lists
-        const asList = v => Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]);
-
-        function buildCard(item) {
-            ['PlayByPlay', 'Messages', 'Links', 'Attachments', 'Ids', 'Conversation'].forEach(k => item[k] = asList(item[k]));
-            const card = document.createElement('div');
-            card.className = 'email-card';
-            card.dataset.ids = JSON.stringify((item.Ids || []).filter(Boolean));
-            
-            const isReq = item.Category === 'Requires Response';
-            const newestId = esc((item.Ids || [])[0] || '');
-            const msgs = item.Messages || [];
-
-            // Single email: context bullets. Thread with several unread: one line per message, oldest first.
-            let body;
-            const conv = Array.isArray(item.Conversation) ? item.Conversation : (item.Conversation ? [item.Conversation] : []);
-            if (item.ForYou || item.Ask || item.YourMove) {
-                // Brief: is it for me, what they want, where it stands, my next step; then the conversation, oldest first
-                const row = (k, v, cls = '') => v ? `<div class="brief-k">${k}</div><div class="brief-v ${cls}">${esc(v)}</div>` : '';
-                // For you, then the conversation bubbles, then your move
-                body = `<div class="brief">${row('For you', item.ForYou, /^yes/i.test(item.ForYou || '') ? 'foryou-yes' : '')}</div>`;
-                if (conv.length) {
-                    body += '<div class="convo">' + conv.map(c => `<div class="bubble${/^you$/i.test(c.From) ? ' me' : ''}">
-                        <div class="bubble-head"><b>${esc(c.From)}</b>${c.When ? ' · ' + esc(c.When) : ''}</div>${esc(c.Said)}</div>`).join('') + '</div>';
-                } else if (item.Ask) {
-                    body += `<div class="brief">${row('The ask', item.Ask)}</div>`;
-                }
-                body += `<div class="brief">${row('Your move', item.YourMove)}${item.Deadline ? row('Due', item.Deadline) : ''}</div>`;
-            } else if (msgs.length > 1) {
-                body = '<ol class="thread-list">' + msgs.map(m => `
-                    <li><span class="thread-from">${esc(m.From)}</span><span class="thread-time">${esc(fmtReceived(m.Received))}</span>
-                    <div class="thread-sum">${esc(m.Summary)}</div></li>`).join('') + '</ol>';
-            } else {
-                body = '<ul class="play-list">' + (item.PlayByPlay || []).map(b => `<li>${esc(b)}</li>`).join('') + '</ul>';
-            }
-
-            const links = (item.Links || []).map(l =>
-                `<a class="chip chip-link" href="${esc(l.Url)}" target="_blank" rel="noopener" title="${esc(l.Url)}">${ICON_LINK}<span>${esc(l.Title || l.Url)}</span></a>`).join('');
-            const atts = (item.Attachments || []).map(a =>
-                `<button class="chip chip-att" data-id="${esc(a.Id)}" data-index="${a.Index}" onclick="handleAttachment(this)" title="Open ${esc(a.Name)}">${ICON_CLIP}<span>${esc(a.Name)}</span><span class="chip-size">${a.SizeKB} KB</span></button>`).join('');
-            const resources = (links || atts) ? `<div class="chip-row">${links}${atts}</div>` : '';
-            const badge = msgs.length > 1 ? `<span class="unread-badge">${msgs.length} unread</span>` : '';
-
-            card.innerHTML = `
-                <div class="email-subject">${esc(item.CleanSubject || item.Subject || 'Email Thread')}${badge}</div>
-                <div class="email-meta">${esc(item.From || '')}${item.From && item.LatestReceived ? ' · ' : ''}${esc(fmtReceived(item.LatestReceived))}</div>
-                ${(item.ForYou || item.Ask || item.YourMove) ? '' : `<div class="email-task">${esc(item.ActionTask || 'Review thread')}</div>`}
-                ${body}
-                ${resources}
-                <div class="card-actions">
-                    <button class="btn-take-action" onclick="toggleAction(this)">Take action</button>
-                    <button class="btn-take-action" onclick="handleOpen('${newestId}', this)" title="Open the newest message in Outlook">Open in Outlook</button>
-                    <button class="btn-take-action" onclick="addEmailTask(this)" title="Add this email to Running Notes">Add to tasks</button>
-                    <button class="btn-take-action btn-clear" onclick="handleClear(this)" title="Mark as read in Outlook and remove from the dashboard">Clear</button>
-                </div>
-                <div class="action-panel" style="display:none;">
-                    <div class="control-row">
-                        <textarea class="input-prompt" rows="1" placeholder="Enter: Ask AI  |  Ctrl+Enter: Draft  |  Shift+Enter: new line" oninput="autoGrow(this)" onkeydown="promptKeys(event, this)"></textarea>
-                        <button class="btn-action btn-ask" onclick="handleAsk('${newestId}', this)">Ask AI</button>
-                        <button class="btn-action btn-draft" onclick="handleDraft('${newestId}', this)">Draft</button>
-                    </div>
-                    <div class="ai-answer" style="display:none;"></div>
-                </div>
-            `;
-            card._item = item;
-            return card;
-        }
-
-
-        const ICON_LINK = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h4v4"/><path d="M13 3L7 9"/><path d="M11 9.5V13H3V5h3.5"/></svg>';
-        const ICON_CLIP = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 7.5l-5.6 5.6a3.2 3.2 0 01-4.5-4.5l5.9-5.9a2.1 2.1 0 013 3l-5.9 5.9a1 1 0 01-1.5-1.5l5.3-5.3"/></svg>';
-
-        function fmtReceived(s) {
-            const d = new Date(s);
-            if (isNaN(d)) return '';
-            const today = new Date();
-            const sameDay = d.toDateString() === today.toDateString();
-            const wd = d.toLocaleDateString('en-US', { weekday: 'short' });
-            return sameDay ? wd + ' ' + fmtTime(d) : wd + ', ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + fmtTime(d);
-        }
-
-        // Enter = Ask AI, Ctrl+Enter = Draft, Shift+Enter = new line
-        function promptKeys(e, el) {
-            if (e.key !== 'Enter' || e.isComposing || e.shiftKey) return;
-            e.preventDefault();
-            const row = el.closest('.control-row');
-            (e.ctrlKey || e.metaKey ? row.querySelector('.btn-draft') : row.querySelector('.btn-ask')).click();
-        }
 
         async function postJson(path, payload) {
             try {
@@ -1579,120 +410,9 @@
             }
         }
 
-        async function handleOpen(id, btn) {
-            if (!id) return;
-            const label = btn.innerText;
-            btn.innerText = 'Opening...';
-            const r = await postJson('/api/open', { Id: id });
-            btn.innerText = r.status === 'success' ? 'Opened' : 'Error';
-            setTimeout(() => { btn.innerText = label; }, 2000);
-        }
-
-        async function handleAttachment(btn) {
-            const name = btn.querySelector('span').innerText;
-            btn.classList.add('busy');
-            const r = await postJson('/api/attachment', { Id: btn.dataset.id, Index: +btn.dataset.index });
-            btn.classList.remove('busy');
-            if (r.status !== 'success') {
-                btn.querySelector('span').innerText = r.message || 'Could not open';
-                setTimeout(() => { btn.querySelector('span').innerText = name; }, 3500);
-            }
-        }
-
         function autoGrow(el) {
             el.style.height = 'auto';
             el.style.height = el.scrollHeight + 2 + 'px';
-        }
-
-        function toggleAction(btn) {
-            const panel = btn.closest('.email-card').querySelector('.action-panel');
-            const open = panel.style.display === 'none';
-            panel.style.display = open ? 'block' : 'none';
-            btn.classList.toggle('open', open);
-            btn.innerText = open ? 'Close' : 'Take action';
-            if (open) panel.querySelector('.input-prompt').focus();
-        }
-
-        async function handleClear(btn) {
-            const card = btn.closest('.email-card');
-            const ids = JSON.parse(card.dataset.ids || '[]');
-            if (!ids.length) return;
-            btn.innerText = 'Clearing...';
-            btn.disabled = true;
-            const ok = await markRead(ids);
-            if (!ok) {
-                btn.innerText = 'Error';
-                setTimeout(() => { btn.innerText = 'Clear'; btn.disabled = false; }, 2500);
-                return;
-            }
-            const container = card.parentElement;
-            card.classList.add('clearing');
-            setTimeout(() => {
-                card.remove();
-                forgetCleared(card.dataset.ids);
-                if (container && !container.querySelector('.email-card')) {
-                    const msg = container.dataset.empty || (container.id === 'reqContainer' ? 'No unread response items.' : 'No unread FYI items.');
-                    container.innerHTML = `<div class="muted">${msg}</div>`;
-                }
-            }, 260);
-        }
-
-        async function handleAsk(id, btn) {
-            const card = btn.closest('.email-card');
-            const input = card.querySelector('.input-prompt');
-            const box = card.querySelector('.ai-answer');
-            const question = input.value.trim();
-            if (!question || !id || id === 'undefined') return;
-
-            btn.innerText = 'Thinking...';
-            btn.disabled = true;
-            box.style.display = 'block';
-            box.innerHTML = `<div class="ai-q">Q: ${esc(question)}</div><div class="muted">Reading the thread...</div>`;
-            try {
-                const res = await fetch('http://localhost:8000/api/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ Id: id, Prompt: question })
-                });
-                const data = await res.json();
-                box.innerHTML = data.status === 'success'
-                    ? `<div class="ai-q">Q: ${esc(question)}</div><div class="ai-a">${esc(data.answer)}</div>`
-                    : `<div class="ai-q">Q: ${esc(question)}</div><div class="muted">Error: ${esc(data.message || 'AI request failed')}</div>`;
-                if (data.status === 'success') { input.value = ''; autoGrow(input); }
-            } catch (e) {
-                box.innerHTML = '<div class="muted">Could not reach the local server.</div>';
-            }
-            btn.innerText = 'Ask AI';
-            btn.disabled = false;
-        }
-
-        async function handleDraft(id, btn) {
-            const input = btn.closest('.email-card').querySelector('.input-prompt');
-            const prompt = input.value;
-            if (!prompt || !id || id === 'undefined') return;
-
-            btn.innerText = 'Drafting...';
-            btn.disabled = true;
-            let ok = false;
-            try {
-                const res = await fetch('http://localhost:8000/api/reply', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ Id: id, Prompt: prompt })
-                });
-                ok = (await res.json()).status === 'success';
-            } catch (e) {}
-            btn.innerText = ok ? 'Opened' : 'Error';
-            if (ok) { input.value = ''; autoGrow(input); }
-            setTimeout(() => {
-                btn.innerText = 'Draft';
-                btn.disabled = false;
-                if (ok) {
-                    const card = btn.closest('.email-card');
-                    const toggle = card.querySelector('.btn-take-action');
-                    if (card.querySelector('.action-panel').style.display !== 'none') toggleAction(toggle);
-                }
-            }, 2500);
         }
 
         // --- RUNNING NOTES (nested checklist stored in todo.json) ---
@@ -1707,7 +427,7 @@
                     try { data = JSON.parse(data); }
                     catch (e) { data = data.trim() ? [{ id: newId(), text: data.trim(), checked: false, children: [] }] : []; }
                 }
-                todos = Array.isArray(data) ? data : [];
+                todos = Array.isArray(data) ? data.flat(Infinity).filter(x => x && typeof x === 'object') : [];
             } catch (e) {
                 todos = [];
             }
@@ -1737,8 +457,12 @@
             const input = document.getElementById('newTodo');
             const text = input.value.trim();
             if (!text) return;
-            todos.push({ id: newId(), text, checked: false, children: [] });
+            const dueEl = document.getElementById('newTodoDue');
+            const t = { id: newId(), text, checked: false, children: [] };
+            if (dueEl && dueEl.value) t.due = dueEl.value;
+            todos.push(t);
             input.value = '';
+            if (dueEl) dueEl.value = '';
             saveNotes();
             renderTodos();
         }
@@ -1784,6 +508,51 @@
                 const el = list.querySelector(`[data-id="${focusId}"]`);
                 if (el) el.focus();
             }
+        }
+
+        // Due date set by the assistant ("when do you want to get this done?"). Click the chip to change it; clear the date to remove it.
+        function todoDueLabel(due) {
+            const d = new Date(due + 'T00:00:00'), t = new Date(); t.setHours(0, 0, 0, 0);
+            const days = Math.round((d - t) / 86400000);
+            const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            if (days < 0) return { text: 'Overdue · ' + md, cls: 'late' };
+            if (days === 0) return { text: 'Today', cls: 'soon' };
+            if (days === 1) return { text: 'Tomorrow', cls: 'soon' };
+            if (days < 7) return { text: d.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + md, cls: '' };
+            return { text: md, cls: '' };
+        }
+        function todoDueChip(item) {
+            const chip = document.createElement('span');
+            if (item.due) {
+                const lab = todoDueLabel(item.due);
+                chip.className = 'todo-due' + (lab.cls ? ' ' + lab.cls : '');
+                chip.textContent = lab.text;
+                chip.title = 'Due ' + item.due + '. Click to change.';
+            } else {
+                // Undated: a faint "+ date" that shows on hover, same as the other row buttons
+                chip.className = 'todo-due todo-due-empty';
+                chip.textContent = '+ date';
+                chip.title = 'Set a due date';
+            }
+            chip.onclick = () => {
+                const inp = document.createElement('input');
+                inp.type = 'date';
+                inp.className = 'todo-due-input';
+                inp.value = item.due || '';
+                const done = () => {
+                    if (inp.value !== (item.due || '')) {
+                        if (inp.value) item.due = inp.value; else delete item.due;
+                        saveNotes();
+                    }
+                    renderTodos();
+                };
+                inp.onchange = done;
+                inp.onblur = done;
+                inp.onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') inp.blur(); };
+                chip.replaceWith(inp);
+                inp.focus();
+            };
+            return chip;
         }
 
         let dragState = null;
@@ -1865,9 +634,12 @@
                 renderTodos();
             };
 
+            const acts = document.createElement('span');
+            acts.className = 'todo-acts';
             row.appendChild(grip);
             row.appendChild(cb);
             row.appendChild(txt);
+            if (!item.checked) row.appendChild(todoDueChip(item));
 
             const kids = item.children || [];
             if (depth === 0 && kids.length) {
@@ -1887,15 +659,15 @@
                     kids.push(child);
                     renderTodos(child.id);
                 };
-                row.appendChild(add);
+                acts.appendChild(add);
             }
 
-            if (item.mailId) {
+            if (item.mailLink) {
                 const open = document.createElement('button');
                 open.className = 'todo-btn';
                 open.innerText = 'Open email';
-                open.onclick = () => handleOpen(item.mailId, open);
-                row.appendChild(open);
+                open.onclick = () => window.open(item.mailLink, '_blank');
+                acts.appendChild(open);
             }
 
             const del = document.createElement('button');
@@ -1907,178 +679,504 @@
                 saveNotes();
                 renderTodos();
             };
-            row.appendChild(del);
+            acts.appendChild(del);
+            row.appendChild(acts);
 
             wrap.appendChild(row);
             kids.forEach(c => wrap.appendChild(todoNode(c, kids, depth + 1)));
             return wrap;
         }
 
+        // --- NOTES TAB (pages: General plus one per topic; autosaves; reloads when the assistant files a note) ---
+        let jotBackupNext = false, jotLoaded = false, jotStamp = null, jotTimer = null, jotPage = 'General', jotPages = ['General'];
+        try { jotPage = localStorage.getItem('jotPage') || 'General'; } catch (e) {}
+        function renderJotList() {
+            const sel = document.getElementById('jotSelect');
+            sel.innerHTML = jotPages.map(p => '<option value="' + esc(p) + '"' + (p === jotPage ? ' selected' : '') + '>' + esc(p) + '</option>').join('');
+            sel.onchange = () => selectJotPage(sel.value);
+            document.getElementById('jotTitle').innerText = jotPage;
+            const gen = jotPage === 'General';
+            document.getElementById('jotRename').style.display = gen ? 'none' : '';
+            document.getElementById('jotRemove').style.display = gen ? 'none' : '';
+        }
+        async function loadJot() {
+            const ta = document.getElementById('jotText');
+            try {
+                const r = await (await fetch('http://localhost:8000/api/notes?page=' + encodeURIComponent(jotPage), { cache: 'no-store' })).json();
+                jotPages = r.pages || ['General'];
+                jotPage = r.page || 'General';
+                renderJotList();
+                if (document.activeElement !== ta && !jotTimer) { ta.value = r.text || ''; jotStamp = r.stamp || ''; }   // never overwrite while typing
+                jotLoaded = true;
+                document.getElementById('jotStatus').innerText = '';
+            } catch (e) { document.getElementById('jotStatus').innerText = 'Could not load notes'; }
+        }
+        async function saveJot() {
+            jotTimer = null;
+            const bk = jotBackupNext; jotBackupNext = false;
+            const r = await postJson('/api/notes', { Page: jotPage, Text: document.getElementById('jotText').value, Backup: bk });
+            if (r.status === 'success') { jotStamp = r.stamp; document.getElementById('jotStatus').innerText = 'Saved ' + fmtTime(new Date()); }
+            else { document.getElementById('jotStatus').innerText = 'Save failed'; loadJot(); }
+        }
+
+        // --- NOTES AI PANEL: edit or brainstorm on the current page; the page and selection go to Claude, nothing else ---
+        let aiSel = { start: 0, end: 0 }, aiHist = [], aiBusy = false, aiHistPage = 'General';
+        function aiOn() { return document.getElementById('jotAiToggle') && document.querySelector('.jot-wrap').classList.contains('ai-on'); }
+        function aiTrackSel() {
+            const ta = document.getElementById('jotText');
+            if (document.activeElement !== ta) return;
+            aiSel = { start: ta.selectionStart, end: ta.selectionEnd };
+            const n = aiSel.end - aiSel.start;
+            document.getElementById('aiSel').innerText = n > 0 ? n + ' chars selected' : '';
+        }
+        ['select', 'keyup', 'mouseup', 'input'].forEach(ev => document.addEventListener(ev, e => { if (e.target.id === 'jotText') aiTrackSel(); }));
+        function aiAdd(cls, text) {
+            const log = document.getElementById('aiLog');
+            const e0 = document.getElementById('aiEmpty'); if (e0) e0.remove();
+            const d = document.createElement('div'); d.className = 'ai-msg ' + cls; d.textContent = text;
+            log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+        }
+        function aiSetText(ta, text) {   // execCommand keeps the browser's own undo (Ctrl+Z) working and fires the input event that autosaves
+            ta.focus();
+            let ok = false;
+            try { ok = document.execCommand('insertText', false, text); } catch (e) {}
+            if (!ok) { ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+        }
+        function aiParse(raw) {
+            let t = String(raw || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+            try { return JSON.parse(t); } catch (e) {}
+            const a = t.indexOf('{'), b = t.lastIndexOf('}');
+            if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+            return { reply: t, edit: null };
+        }
+        // Returns '' on success or a reason the edit was not applied
+        function aiApply(edit, sentSel, sentText) {
+            const ta = document.getElementById('jotText');
+            const before = ta.value;
+            if (before !== sentText) return 'The page changed while Claude worked, so I did not apply the edit.';
+            const txt = String(edit.text == null ? '' : edit.text);
+            const mode = String(edit.mode || '');
+            jotBackupNext = true;
+            if (mode === 'replace_selection' || mode === 'insert_after_selection') {
+                if (!sentSel.text || before.slice(sentSel.start, sentSel.end) !== sentSel.text) return 'The selection moved, so I did not apply the edit. Select the text again.';
+                if (mode === 'replace_selection') { ta.focus(); ta.setSelectionRange(sentSel.start, sentSel.end); aiSetText(ta, txt); }
+                else {
+                    const lead = (txt.startsWith('\n') || before.slice(0, sentSel.end).endsWith('\n')) ? '' : '\n';
+                    ta.focus(); ta.setSelectionRange(sentSel.end, sentSel.end); aiSetText(ta, lead + txt);
+                }
+            } else if (mode === 'replace_page') {
+                ta.focus(); ta.setSelectionRange(0, before.length); aiSetText(ta, txt);
+            } else if (mode === 'append') {
+                const lead = !before || before.endsWith('\n\n') ? '' : (before.endsWith('\n') ? '\n' : '\n\n');
+                ta.focus(); ta.setSelectionRange(before.length, before.length); aiSetText(ta, lead + txt);
+            } else { jotBackupNext = false; return 'Claude sent an edit I could not read.'; }
+            return '';
+        }
+        function aiUndoBtn(prev, forPage) {
+            const b = document.createElement('button'); b.className = 'btn-refresh ai-undo'; b.innerText = 'Undo this edit';
+            b.onclick = () => {
+                if (jotPage !== forPage) { b.remove(); return; }
+                const ta = document.getElementById('jotText');
+                ta.focus(); ta.setSelectionRange(0, ta.value.length); aiSetText(ta, prev);
+                b.remove();
+            };
+            document.getElementById('aiLog').appendChild(b);
+        }
+        async function aiSend() {
+            if (aiBusy) return;
+            const inp = document.getElementById('aiIn'), msg = inp.value.trim();
+            if (!msg) return;
+            const ta = document.getElementById('jotText');
+            if (jotTimer) { clearTimeout(jotTimer); await saveJot(); }   // disk matches the screen, so the backup holds the pre-edit page
+            const sentText = ta.value, page = jotPage;
+            if (page !== aiHistPage) { aiHist = []; aiHistPage = page; }
+            const sentSel = { start: aiSel.start, end: aiSel.end, text: '' };
+            if (sentSel.end > sentSel.start && sentSel.end <= sentText.length) sentSel.text = sentText.slice(sentSel.start, sentSel.end);
+            inp.value = ''; aiBusy = true;
+            document.getElementById('aiSend').disabled = true;
+            aiAddSelNote(msg, sentSel);
+            const wait = aiAdd('bot wait', 'Working...');
+            let result = null;
+            const start = await postJson('/api/notes/ai', { Page: page, Text: sentText, Selection: sentSel.text, Message: msg, History: aiHist });
+            if (start.status !== 'started') result = { status: 'error', message: start.message || 'Could not start the request.' };
+            else {
+                const t0 = Date.now();
+                while (Date.now() - t0 < 180000) {
+                    await new Promise(r => setTimeout(r, 1500));
+                    try { result = await (await fetch('http://localhost:8000/api/notes/ai?id=' + start.id, { cache: 'no-store' })).json(); }
+                    catch (e) { result = { status: 'error', message: 'Could not reach the local server.' }; }
+                    if (result.status !== 'pending') break;
+                }
+                if (!result || result.status === 'pending') result = { status: 'error', message: 'Claude took too long. Try a shorter selection.' };
+            }
+            wait.remove();
+            if (result.status === 'done') {
+                const out = aiParse(result.text);
+                aiHist.push({ role: 'user', text: msg });
+                const reply = String(out.reply || '').trim();
+                aiHist.push({ role: 'assistant', text: reply });
+                if (jotPage !== page) aiAdd('err', 'You switched pages, so I did not apply anything.');
+                else {
+                    let problem = '';
+                    if (out.edit && out.edit.mode) problem = aiApply(out.edit, sentSel, sentText);
+                    if (reply) aiAdd('bot', reply);
+                    if (problem) aiAdd('err', problem);
+                    else if (out.edit && out.edit.mode) aiUndoBtn(sentText, page);
+                }
+            } else aiAdd('err', result.message || 'Something went wrong.');
+            aiBusy = false;
+            document.getElementById('aiSend').disabled = false;
+        }
+        function aiAddSelNote(msg, sel) {
+            const d = aiAdd('me', msg);
+            if (sel.text) { const s = document.createElement('div'); s.style.cssText = 'font-size:0.74rem;color:var(--text-faint);margin-top:0.25rem'; s.textContent = 'On selection: ' + sel.text.slice(0, 60).replace(/\s+/g, ' ') + (sel.text.length > 60 ? '...' : ''); d.appendChild(s); }
+        }
+        document.getElementById('aiSend').onclick = aiSend;
+        document.getElementById('aiIn').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); } });
+        document.getElementById('aiClear').onclick = () => { aiHist = []; const l = document.getElementById('aiLog'); l.innerHTML = '<div class="ai-empty" id="aiEmpty">Chat cleared.</div>'; };
+        document.getElementById('jotAiToggle').onclick = () => {
+            const w = document.querySelector('.jot-wrap'); w.classList.toggle('ai-on');
+            lsSet('jotAi', w.classList.contains('ai-on') ? '1' : '0');
+            if (w.classList.contains('ai-on')) document.getElementById('aiIn').focus();
+        };
+        if (lsGet('jotAi') === '1') document.querySelector('.jot-wrap').classList.add('ai-on');
+
+
+        // Page height follows the content; the box scrolls only past 85% of the window height
+        let jotFitKey = '';
+        function jotFit() {
+            const ta = document.getElementById('jotText');
+            if (!ta || !ta.offsetParent) return;
+            const key = ta.value.length + ':' + ta.clientWidth;
+            if (key === jotFitKey) return;
+            jotFitKey = key;
+            ta.style.height = 'auto';
+            ta.style.height = (ta.scrollHeight + 2) + 'px';
+        }
+        document.addEventListener('input', e => { if (e.target.id === 'jotText') { jotFitKey = ''; jotFit(); } });
+        window.addEventListener('resize', () => { jotFitKey = ''; jotFit(); });
+        setInterval(jotFit, 300);
+
+        async function selectJotPage(p) {
+            if (p === jotPage) return;
+            if (jotTimer) { clearTimeout(jotTimer); await saveJot(); }
+            jotPage = p;
+            try { localStorage.setItem('jotPage', p); } catch (e) {}
+            document.getElementById('jotText').value = '';
+            loadJot();
+        }
+        async function jotPageAction(payload) {
+            if (jotTimer) { clearTimeout(jotTimer); await saveJot(); }
+            const r = await postJson('/api/notes/pages', payload);
+            if (r.status !== 'success') { document.getElementById('jotStatus').innerText = r.message || 'Could not do that'; return; }
+            jotPages = r.pages || ['General'];
+            jotPage = r.page || jotPage;
+            try { localStorage.setItem('jotPage', jotPage); } catch (e) {}
+            document.getElementById('jotText').value = '';
+            loadJot();
+        }
+        // Inline replacement for prompt()/confirm(). initial === null shows a yes/no row without a text box.
+        function jotAsk(label, initial, okText, onOk) {
+            const box = document.getElementById('jotAsk'), inp = document.getElementById('jotAskInput');
+            document.getElementById('jotAskLabel').innerText = label;
+            document.getElementById('jotAskOk').innerText = okText;
+            inp.style.display = initial === null ? 'none' : '';
+            inp.value = initial || '';
+            box.style.display = 'flex';
+            const close = () => { box.style.display = 'none'; };
+            const ok = () => {
+                const v = inp.value.trim();
+                if (initial !== null && !v) { inp.focus(); return; }
+                close(); onOk(v);
+            };
+            document.getElementById('jotAskOk').onclick = ok;
+            document.getElementById('jotAskCancel').onclick = close;
+            inp.onkeydown = e => { if (e.key === 'Enter') ok(); else if (e.key === 'Escape') close(); };
+            if (initial !== null) { inp.focus(); inp.select(); }
+        }
+        document.addEventListener('click', e => {
+            const b = e.target.closest ? e.target.closest('#jotNew, #jotRename, #jotRemove') : null;
+            if (!b) return;
+            if (b.id === 'jotNew') jotAsk('New page name', '', 'Create', n => jotPageAction({ Action: 'create', Name: n }));
+            else if (b.id === 'jotRename') { const old = jotPage; jotAsk('Rename "' + old + '" to', old, 'Rename', n => { if (n !== old) jotPageAction({ Action: 'rename', Name: old, NewName: n }); }); }
+            else if (b.id === 'jotRemove') { const old = jotPage; jotAsk('Remove "' + old + '"? Its text is kept in data\\notes\\_removed.', null, 'Remove', () => jotPageAction({ Action: 'remove', Name: old })); }
+            else selectJotPage(b.dataset.page);
+        });
+        document.addEventListener('input', e => {
+            if (e.target.id !== 'jotText' || !jotLoaded) return;
+            document.getElementById('jotStatus').innerText = 'Editing...';
+            clearTimeout(jotTimer); jotTimer = setTimeout(saveJot, 800);
+        });
+        document.addEventListener('focusout', e => { if (e.target.id === 'jotText' && jotTimer) { clearTimeout(jotTimer); saveJot(); } });
+
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-            document.getElementById('tab-catchup').style.display = tab === 'catchup' ? 'block' : 'none';
-            if (tab === 'catchup') loadCatchupResult();
-
-            document.getElementById('tab-inbox').style.display = tab === 'inbox' ? 'grid' : 'none';
             document.getElementById('tab-notes').style.display = tab === 'notes' ? 'block' : 'none';
-            document.getElementById('tab-tomorrow').style.display = tab === 'tomorrow' ? 'block' : 'none';
+            document.getElementById('tab-jot').style.display = tab === 'jot' ? 'block' : 'none';
+            if (tab === 'jot') loadJot();
+            document.getElementById('tab-streams').style.display = tab === 'streams' ? 'block' : 'none';
+            if (tab === 'streams') loadStreams();
+            lsSet('tab', tab);
         }
 
-        // --- INBOX ASSISTANT ---
-        const asstHistory = [];      // [{Role, Text}] sent with follow-up questions
-        let asstBusy = false;
+        // --- STREAMS TAB ---
+        // Source of truth: streams.json (also edited by Claude Code). Every edit re-reads the file, applies one change,
+        // and writes it back only if nobody changed it in between. Status is never inferred: it all comes from the file.
+        // The "last activity" line is computed by the server from file times and is display-only.
+        let stData = null, stAct = {}, stFilter = 'active', stBusy = false;
+        const ST_LABEL = { paper: 'Papers', report: 'Reports', whitepaper: 'White papers', software: 'Software' };
+        const ST_DONE_GROUPS = [['Refereed papers', ['paper']], ['Reports', ['report']], ['White papers', ['whitepaper']], ['Software', ['software']], ['Working papers & chapters', ['workingpaper', 'chapter']]];
+        const ST_REJECTABLE = ['Submitted', 'R&R', 'Resubmitted'];
+        const stToday = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+        const stMsg = t => { document.getElementById('stStatus').innerText = t || ''; };
+        const stHist = (it, what, extra) => { (it.history = it.history || []).push(Object.assign({ date: stToday(), what }, extra || {})); };
+        const stFind = (d, id) => (d.items || []).find(x => x.id === id);
 
-        function toggleAssistant(force) {
-            const panel = document.getElementById('asstPanel');
-            const open = force != null ? force : panel.style.display === 'none';
-            panel.style.display = open ? 'flex' : 'none';
-            document.getElementById('asstFab').classList.toggle('open', open);
-            if (open) document.getElementById('asstInput').focus();
+        async function loadStreams() {
+            try {
+                const r = await (await fetch('http://localhost:8000/api/streams', { cache: 'no-store' })).json();
+                if (r.status !== 'success') { stMsg(r.message || 'Could not read streams.json'); return; }
+                stData = JSON.parse(r.text); stAct = r.activity || {};
+                renderStreams(); stMsg('');
+                stAddInternalRevise();
+            } catch (e) { stMsg('Could not read streams.json'); }
         }
-
-        function clearAssistant() {
-            asstHistory.length = 0;
-            const log = document.getElementById('asstLog');
-            log.querySelectorAll('.asst-msg').forEach(n => n.remove());
-            log.querySelector('.asst-hint').style.display = '';
-            document.getElementById('asstInput').focus();
+        // One-time pipeline change: "Internal revise" sits right after "Co-author review" (before Submitted)
+        let stMigrated = false;
+        function stAddInternalRevise() {
+            if (stMigrated) return; stMigrated = true;
+            const need = d => Object.keys(d.pipelines || {}).filter(k => { const a = d.pipelines[k]; return a.some(x => /co-?author/i.test(x)) && !a.includes('Internal revise'); });
+            if (!need(stData).length) return;
+            stEdit('pipeline: add Internal revise', d => {
+                const ks = need(d); if (!ks.length) return false;
+                ks.forEach(k => { const a = d.pipelines[k]; a.splice(a.findIndex(x => /co-?author/i.test(x)) + 1, 0, 'Internal revise'); });
+            });
         }
-
-        function asstKeys(e) {
-            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); askAssistant(); }
-            if (e.key === 'Escape') toggleAssistant(false);
-        }
-
-        document.addEventListener('keydown', e => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleAssistant(true); }
+        // Click the court badge to change who holds the ball ("You" or a name; blank clears it)
+        document.addEventListener('click', e => {
+            const b = e.target.closest ? e.target.closest('.st-ball') : null; if (!b || !b.closest('#tab-streams')) return;
+            const card = b.closest('[data-id]'); const it = card && stFind(stData, card.dataset.id); if (!it) return;
+            const inp = document.createElement('input');
+            inp.type = 'text'; inp.className = 'input-prompt st-ball-in'; inp.maxLength = 40; inp.placeholder = 'You, or a name';
+            inp.value = it.ball || ''; let done = false;
+            const fin = save => {
+                if (done) return; done = true;
+                let v = inp.value.trim(); if (/^(you|me|mine|my court|your court)$/i.test(v)) v = 'You';
+                if (save && v !== (it.ball || '')) stSetField(it.id, 'ball', v, 'Court'); else renderStreams();
+            };
+            inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') fin(true); else if (ev.key === 'Escape') fin(false); });
+            inp.addEventListener('blur', () => fin(true));
+            b.replaceWith(inp); inp.focus(); inp.select();
         });
 
-        function asstAdd(cls, html) {
-            const log = document.getElementById('asstLog');
-            log.querySelector('.asst-hint').style.display = 'none';
-            const d = document.createElement('div');
-            d.className = 'asst-msg ' + cls;
-            d.innerHTML = html;
-            log.appendChild(d);
-            log.scrollTop = log.scrollHeight;
-            return d;
-        }
-
-        // Cancellation confirm cards: Outlook's own Send Cancellation fails on this account, so the app sends after you confirm here
-        function renderConfirms(parent, list) {
-            (list || []).forEach(c => {
-                const card = document.createElement('div');
-                card.className = 'asst-confirm';
-                card.innerHTML = `<div class="asst-confirm-subj">${esc(c.Subject)}</div>
-                    <div class="asst-confirm-meta">${esc(c.When)}${c.Attendees ? ' · ' + esc(c.Attendees) : ''}</div>
-                    ${c.NoNote ? '' : `<textarea placeholder="Optional note to attendees">${esc(c.Note || '')}</textarea>`}
-                    <div class="asst-confirm-btns"><button class="asst-choice">${esc(c.Button || 'Send cancellation')}</button><button class="asst-choice secondary">Keep it</button></div>`;
-                const [send, keep] = card.querySelectorAll('button');
-                const done = text => { const n = document.createElement('div'); n.className = 'asst-answer asst-choice-result'; n.textContent = text; card.replaceWith(n); asstHistory.push({ Role: 'Assistant', Text: text }); };
-                keep.onclick = () => done(`Kept "${c.Subject}".`);
-                send.onclick = async () => {
-                    send.disabled = keep.disabled = true; send.textContent = 'Sending...';
-                    const r = await postJson('/api/calendar/act', Object.assign({}, c.Payload, { Message: (card.querySelector('textarea') || { value: '' }).value.trim() }));
-                    done(r.message || (r.status === 'success' ? 'Sent.' : 'Something went wrong.'));
-                };
-                parent.appendChild(card);
-            });
-            const log = document.getElementById('asstLog');
-            log.scrollTop = log.scrollHeight;
-        }
-
-        function renderAnswer(bubble, res) {
-            const text = esc(res.Answer || '').replace(/\[(\d+)\]/g, '<span class="asst-cite">[$1]</span>');
-            const srcs = (res.Sources || []).map(s => {
-                const d = new Date(s.Date);
-                const when = isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                const links = (s.Links || []).map(l =>
-                    `<a class="chip chip-link" href="${esc(l.Url)}" target="_blank" rel="noopener" title="${esc(l.Url)}">${ICON_LINK}<span>${esc(l.Title || l.Url)}</span></a>`).join('');
-                const atts = (s.Attachments || []).map(a =>
-                    `<button class="chip chip-att" data-id="${esc(a.Id)}" data-index="${a.Index}" onclick="handleAttachment(this)" title="Open ${esc(a.Name)}">${ICON_CLIP}<span>${esc(a.Name)}</span><span class="chip-size">${a.SizeKB} KB</span></button>`).join('');
-                return `<div class="asst-src-wrap">
-                    <button class="asst-src" onclick="handleOpen('${esc(s.Id)}', this.querySelector('.asst-src-meta'))" title="Open in Outlook">
-                    <span class="asst-src-n">[${s.N}]</span><span class="asst-src-subj">${esc(s.Subject)}</span><span class="asst-src-meta">${esc(s.From)} · ${when}</span></button>
-                    ${(links || atts) ? `<div class="chip-row asst-chips">${atts}${links}</div>` : ''}</div>`;
-            }).join('');
-            bubble.innerHTML = `<div class="asst-answer">${text}</div>` +
-                (srcs ? `<div class="asst-sources">${srcs}</div>` : '') +
-                (res.Searched ? `<div class="asst-searched">Searched: ${esc(res.Searched)}</div>` : '');
-            // Calendar choices (which meeting, or which free time): each opens in Outlook for review
-            const choices = res.Choices || [];
-            if (choices.length) {
-                const box = document.createElement('div');
-                box.className = 'asst-choices';
-                choices.forEach(ch => {
-                    const b = document.createElement('button');
-                    b.className = 'asst-choice';
-                    b.textContent = ch.Label;
-                    b.onclick = async () => {
-                        box.querySelectorAll('button').forEach(x => x.disabled = true);
-                        b.textContent = 'Opening in Outlook...';
-                        const r = await postJson('/api/calendar/act', ch.Payload);
-                        const note = document.createElement('div');
-                        note.className = 'asst-answer asst-choice-result';
-                        note.textContent = r.message || (r.status === 'success' ? 'Opened in Outlook.' : 'Something went wrong.');
-                        box.replaceWith(note);
-                        asstHistory.push({ Role: 'Assistant', Text: note.textContent });
-                        renderConfirms(bubble, r.confirm);
-                    };
-                    box.appendChild(b);
-                });
-                bubble.appendChild(box);
-            }
-            renderConfirms(bubble, res.Confirm);
-            const log = document.getElementById('asstLog');
-            log.scrollTop = log.scrollHeight;
-        }
-
-        async function askAssistant() {
-            if (asstBusy) return;
-            const input = document.getElementById('asstInput');
-            const q = input.value.trim();
-            if (!q) return;
-            input.value = ''; autoGrow(input);
-            asstAdd('asst-user', esc(q));
-            const bubble = asstAdd('asst-bot', '<span class="asst-pending">Starting</span>');
-            asstBusy = true;
-            document.getElementById('asstSend').disabled = true;
-            const t0 = Date.now();
+        // Re-read, apply fn to the fresh data, write back. fn returns false to cancel. Retries once if the file changed meanwhile.
+        async function stEdit(what, fn) {
+            if (stBusy) return; stBusy = true; stMsg('Saving...');
             try {
-                const start = await postJson('/api/assistant/ask', { Question: q, History: asstHistory.slice(-8) });
-                if (!start.id) throw new Error(start.message || 'Could not start');
-                let s;
-                while (true) {
-                    await new Promise(r => setTimeout(r, 1500));
-                    s = await (await fetch('http://localhost:8000/api/assistant/status?id=' + start.id, { cache: 'no-store' })).json();
-                    if (s.Status !== 'running') break;
-                    bubble.innerHTML = `<span class="asst-pending">${esc(s.Stage)} · ${Math.round((Date.now() - t0) / 1000)}s</span>`;
+                for (let i = 0; i < 2; i++) {
+                    const r = await (await fetch('http://localhost:8000/api/streams', { cache: 'no-store' })).json();
+                    if (r.status !== 'success') { stMsg(r.message || 'Could not read streams.json'); return; }
+                    const d = JSON.parse(r.text);
+                    if (fn(d) === false) { stData = d; stAct = r.activity || {}; renderStreams(); stMsg(''); return; }
+                    const w = await fetch('http://localhost:8000/api/streams', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ Base: r.mtime, Text: JSON.stringify(d, null, 2), What: what }) });
+                    if (w.status === 409) continue;
+                    const j = await w.json();
+                    if (j.status !== 'success') { stMsg(j.message || 'Save failed'); return; }
+                    stData = d; stAct = r.activity || {}; renderStreams(); stMsg('Saved ' + fmtTime(new Date()));
+                    return;
                 }
-                if (s.Status === 'done' && s.Result) {
-                    // Calendar windows open through the server's main thread so Outlook's Send buttons work
-                    if (s.Result.Run) {
-                        bubble.innerHTML = '<span class="asst-pending">Opening in Outlook</span>';
-                        const r = await postJson('/api/calendar/act', s.Result.Run);
-                        const msg = r.message || (r.status === 'success' ? 'Opened in Outlook.' : 'Something went wrong.');
-                        s.Result.Answer = s.Result.Answer ? msg + '\n\n' + s.Result.Answer : msg;
-                        s.Result.Confirm = r.confirm || [];
-                    }
-                    renderAnswer(bubble, s.Result);
-                    asstHistory.push({ Role: 'User', Text: q }, { Role: 'Assistant', Text: s.Result.Answer || '' });
-                } else {
-                    bubble.innerHTML = `<div class="asst-answer">Something went wrong: ${esc(s.Error || s.Status)}</div>`;
-                }
-            } catch (e) {
-                bubble.innerHTML = `<div class="asst-answer">Could not reach the local server.</div>`;
-            }
-            asstBusy = false;
-            document.getElementById('asstSend').disabled = false;
-            input.focus();
+                stMsg('streams.json changed while saving. Reloaded; please redo the change.'); await loadStreams();
+            } finally { stBusy = false; }
         }
+
+        // ---- changes (each one writes the file and adds a dated history entry) ----
+        function stSetStage(id, stage) {
+            stEdit('stage ' + id + ' -> ' + stage, d => {
+                const it = stFind(d, id); if (!it || it.stage === stage) return false;
+                const from = it.stage; it.stage = stage;
+                stHist(it, 'Stage: ' + from + ' → ' + stage, { from, to: stage });
+                const done = ((d.rules || {}).completeOnStage || {})[it.type];
+                if (done && stage === done) {
+                    it.status = 'completed';
+                    it.completed = Object.assign({ year: String(new Date().getFullYear()), venue: '' }, it.completed || {});
+                    stHist(it, 'Completed');
+                }
+            });
+        }
+        function stReject(id, journal, to) {
+            stEdit('rejected ' + id, d => {
+                const it = stFind(d, id); if (!it) return false;
+                const from = it.stage; it.stage = to;
+                stHist(it, 'Rejected' + (journal ? ' by ' + journal : '') + '; back to ' + to, { from, to, journal: journal || null });
+            });
+        }
+        function stSetField(id, field, value, label) {
+            stEdit(field + ' ' + id, d => {
+                const it = stFind(d, id); if (!it || (it[field] || null) === (value || null)) return false;
+                it[field] = value || null;
+                stHist(it, label + ': ' + (value || '(cleared)'));
+            });
+        }
+        function stShelve(id) {
+            stEdit('shelve ' + id, d => { const it = stFind(d, id); if (!it) return false; it.status = 'shelved'; stHist(it, 'Shelved at ' + it.stage); });
+        }
+        function stRevive(id) {
+            stEdit('revive ' + id, d => {
+                const it = stFind(d, id); if (!it) return false;
+                if (it.status === 'completed') {
+                    // back to the stage it held before it was completed
+                    const pipe = (d.pipelines || {})[it.type] || [];
+                    const done = ((d.rules || {}).completeOnStage || {})[it.type];
+                    const prev = [...(it.history || [])].reverse().find(h => h.to === done && h.from);
+                    it.stage = prev ? prev.from : (pipe[Math.max(0, pipe.indexOf(done) - 1)] || it.stage);
+                }
+                it.status = 'active';
+                stHist(it, 'Revived at ' + it.stage);
+            });
+        }
+        function stActivate(ideaId) {
+            stEdit('activate idea ' + ideaId, d => {
+                const i = (d.ideas || []).findIndex(x => x.id === ideaId); if (i < 0) return false;
+                const idea = d.ideas.splice(i, 1)[0];
+                let id = idea.id; while (stFind(d, id)) id += '-1';
+                const it = { id, title: idea.title, type: idea.type || 'paper', path: null, status: 'active', stage: 'Build', ball: 'You',
+                    next: null, due: null, tag: null, parent: null, completed: null, history: [] };
+                stHist(it, 'Activated from ideas' + (idea.note ? ' (' + idea.note + ')' : ''));
+                d.items.push(it);
+            });
+        }
+        function stDeleteIdea(ideaId) {
+            stEdit('delete idea ' + ideaId, d => { const i = (d.ideas || []).findIndex(x => x.id === ideaId); if (i < 0) return false; d.ideas.splice(i, 1); });
+        }
+        function stAddIdea(title, type, note) {
+            stEdit('new idea', d => {
+                d.ideas = d.ideas || [];
+                let id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'idea';
+                while (d.ideas.some(x => x.id === id) || stFind(d, id)) id += '-1';
+                d.ideas.push({ id, title, type, note: note || '', noted: stToday() });
+            });
+        }
+
+        // ---- rendering ----
+        function stDueShown(it) {
+            const rule = (((stData || {}).rules || {}).dueShownFor || {})[it.type];
+            return rule === 'all stages' || (Array.isArray(rule) && rule.includes(it.stage));
+        }
+        function stFact(it) {
+            if (!it.path) return '';
+            const a = stAct[it.id];
+            if (!a) return '';
+            if (a.missing) return '<div class="st-fact st-flag">Folder not found</div>';
+            if (a.empty) return '<div class="st-fact">No files yet</div>';
+            const lim = ((stData.rules || {}).inactivityFlagDays) || 60;
+            const ago = a.days === 0 ? 'today' : a.days === 1 ? '1 day ago' : a.days + ' days ago';
+            return `<div class="st-fact">Last activity: <span class="st-mono">${esc(a.file)}</span>, ${ago}` +
+                (a.days > lim ? ` <span class="st-flag">No activity in ${a.days} days</span>` : '') + '</div>';
+        }
+        function stCard(it) {
+            const pipe = (stData.pipelines || {})[it.type] || [];
+            const at = pipe.indexOf(it.stage);
+            const bar = pipe.map((s, i) => `<span class="st-seg${i < at ? ' past' : ''}${i === at ? ' cur' : ''}" title="${esc(s)}">${i === at ? esc(s) : ''}</span>`).join('');
+            const opts = pipe.map(s => `<option${s === it.stage ? ' selected' : ''}>${esc(s)}</option>`).join('') +
+                (it.type === 'paper' && ST_REJECTABLE.includes(it.stage) ? '<option value="__reject">Rejected…</option>' : '');
+            const ball = it.ball ? (it.ball === 'You' ? '<span class="st-ball you" title="Click to change">Your court</span>' : `<span class="st-ball" title="Click to change">With: ${esc(it.ball)}</span>`) : '<span class="st-ball unset" title="Click to set">Set court</span>';
+            const due = stDueShown(it) ? `<label class="st-lab">${it.type === 'paper' ? 'Revision due' : 'Due'} <input type="date" class="todo-due-input st-due" value="${esc(it.due || '')}"></label>` : '';
+            return `<div class="st-card" data-id="${esc(it.id)}">
+                <div class="st-top"><div class="st-title">${esc(it.title)}</div>${ball}</div>
+                <div class="st-sub">${it.path ? `<span class="st-mono">${esc(it.path)}</span>` : ''}${it.tag ? `<span class="st-tag">${esc(it.tag)}</span>` : ''}</div>
+                <div class="st-bar">${bar}</div>
+                <div class="st-ctl">
+                    <label class="st-lab">Stage <select class="st-stage">${opts}</select></label>
+                    ${due}
+                    <button class="jot-link st-shelve">Shelve</button>
+                </div>
+                <div class="st-reject" style="display:none;">Rejected by <input type="text" class="input-prompt st-journal" placeholder="Journal">
+                    <button class="btn-refresh st-rj" data-to="Drafting">Back to Drafting</button><button class="btn-refresh st-rj" data-to="Submitted">Straight to Submitted</button>
+                    <button class="jot-link st-rjx">Cancel</button></div>
+                <label class="st-next"><span class="st-lab">Next</span><input type="text" class="input-prompt st-nexti" value="${esc(it.next || '')}" placeholder="Next action"></label>
+                ${stFact(it)}
+            </div>`;
+        }
+        function renderStreams() {
+            if (!stData) return;
+            const items = stData.items || [], ideas = stData.ideas || [];
+            const active = items.filter(x => x.status === 'active');
+            const yours = active.filter(x => x.ball === 'You').length;
+            const done = items.filter(x => x.status === 'completed'), shelved = items.filter(x => x.status === 'shelved');
+            document.getElementById('stTiles').innerHTML =
+                `<div class="st-tile"><div class="st-num">${active.length}</div><div>Backlog</div><div class="st-small">${yours} yours / ${active.length - yours} with others</div></div>
+                 <div class="st-tile"><div class="st-num">${yours}</div><div>In your court</div></div>
+                 <div class="st-tile"><div class="st-num">${ideas.length}</div><div>Ideas</div></div>
+                 <div class="st-tile"><div class="st-num">${done.length}</div><div>Completed</div></div>`;
+            // Ideas is its own filter: shown only when that chip is on, and it replaces the active cards
+            const onIdeas = stFilter === 'ideas';
+            document.getElementById('stIdeasSec').style.display = onIdeas ? '' : 'none';
+            document.getElementById('stActive').style.display = onIdeas ? 'none' : '';
+            document.getElementById('stChips').innerHTML = [['active', 'Active'], ...Object.entries(ST_LABEL), ['ideas', 'Ideas (' + ideas.length + ')']].map(([k, l]) =>
+                `<button class="st-chip${stFilter === k ? ' on' : ''}" data-f="${k}">${l}</button>`).join('');
+            const types = Object.keys(stData.pipelines || {}).filter(t => stFilter === 'active' || t === stFilter);
+            document.getElementById('stActive').innerHTML = types.map(t => {
+                const list = active.filter(x => x.type === t);
+                return list.length ? `<div class="st-group">${esc(ST_LABEL[t] || t)}</div>` + list.map(stCard).join('') : '';
+            }).join('') || '<div class="muted">Nothing active here.</div>';
+            document.getElementById('stIdeas').innerHTML = ideas.map(i => `<div class="st-idea" data-id="${esc(i.id)}">
+                <div><div class="st-title">${esc(i.title)}</div><div class="st-small">${esc(ST_LABEL[i.type] || i.type || '')}${i.note ? ' · ' + esc(i.note) : ''}${i.noted ? ' · noted ' + esc(i.noted) : ''}</div></div>
+                <span><button class="btn-refresh st-act">Activate</button><button class="jot-link st-del">Delete</button></span></div>`).join('') || '<div class="muted">No ideas noted.</div>';
+            document.getElementById('stDoneCount').innerText = done.length;
+            document.getElementById('stDone').innerHTML = ST_DONE_GROUPS.map(([label, ts]) => {
+                const list = done.filter(x => ts.includes(x.type)).sort((a, b) => String((b.completed || {}).year || '').localeCompare(String((a.completed || {}).year || '')));
+                return list.length ? `<div class="st-group">${label}</div>` + list.map(x => `<div class="st-row" data-id="${esc(x.id)}">
+                    <span class="st-year">${esc((x.completed || {}).year || '')}</span><span class="st-rt">${esc(x.title)}<span class="st-small"> · ${esc((x.completed || {}).venue || '')}</span></span>
+                    <button class="jot-link st-revive">Revive</button></div>`).join('') : '';
+            }).join('') || '<div class="muted">None.</div>';
+            document.getElementById('stShelvedCount').innerText = shelved.length;
+            document.getElementById('stShelved').innerHTML = shelved.map(x => `<div class="st-row" data-id="${esc(x.id)}">
+                <span class="st-rt">${esc(x.title)}<span class="st-small"> · ${esc(ST_LABEL[x.type] || x.type)} · ${esc(x.stage || '')}</span></span>
+                <button class="jot-link st-revive">Revive</button></div>`).join('') || '<div class="muted">None.</div>';
+        }
+
+        // ---- events (delegated so re-renders keep working) ----
+        document.addEventListener('click', e => {
+            const t = e.target; if (!t.closest || !t.closest('#tab-streams')) return;
+            const card = t.closest('[data-id]'), id = card && card.dataset.id;
+            if (t.classList.contains('st-chip')) { stFilter = t.dataset.f; renderStreams(); }
+            else if (t.classList.contains('st-shelve')) stShelve(id);
+            else if (t.classList.contains('st-revive')) stRevive(id);
+            else if (t.classList.contains('st-act')) stActivate(id);
+            else if (t.classList.contains('st-del')) { if (t.dataset.sure) stDeleteIdea(id); else { t.dataset.sure = '1'; t.innerText = 'Confirm delete'; } }
+            else if (t.classList.contains('st-rj')) stReject(id, card.querySelector('.st-journal').value.trim(), t.dataset.to);
+            else if (t.classList.contains('st-rjx')) renderStreams();
+            else if (t.id === 'stIdeaNew') document.getElementById('stIdeaForm').style.display = 'flex';
+            else if (t.id === 'stIdeaCancel') document.getElementById('stIdeaForm').style.display = 'none';
+            else if (t.id === 'stIdeaSave') {
+                const title = document.getElementById('stIdeaTitle').value.trim(); if (!title) return;
+                stAddIdea(title, document.getElementById('stIdeaType').value, document.getElementById('stIdeaNote').value.trim());
+                ['stIdeaTitle', 'stIdeaNote'].forEach(x => document.getElementById(x).value = '');
+                document.getElementById('stIdeaForm').style.display = 'none';
+            }
+            else if (t.id === 'stReload') loadStreams();
+        });
+        document.addEventListener('change', e => {
+            const t = e.target; if (!t.closest || !t.closest('#tab-streams')) return;
+            const card = t.closest('[data-id]'), id = card && card.dataset.id;
+            if (t.classList.contains('st-stage')) {
+                if (t.value === '__reject') { card.querySelector('.st-reject').style.display = 'flex'; card.querySelector('.st-journal').focus(); }
+                else stSetStage(id, t.value);
+            } else if (t.classList.contains('st-due')) stSetField(id, 'due', t.value, 'Due');
+        });
+        document.addEventListener('focusout', e => {
+            const t = e.target;
+            if (t.classList && t.classList.contains('st-nexti')) {
+                const it = stFind(stData, t.closest('[data-id]').dataset.id);
+                if (it && (it.next || '') !== t.value.trim()) stSetField(it.id, 'next', t.value.trim(), 'Next');
+            }
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('st-nexti')) e.target.blur(); });
+
 
         // --- SERVER LIFECYCLE ---
-        // Heartbeat keeps the server alive. Closing this window tells it to shut down
-        // (the server waits a few seconds first, so a reload does not stop it).
+        // Heartbeat keeps the server alive while the window is open; the server also stays on for the assistant.
         let hbFails = 0;
         let hbTimer = null;
         async function heartbeat() {
@@ -2086,10 +1184,7 @@
             try {
                 const r = await fetch('http://localhost:8000/api/heartbeat', { cache: 'no-store' });
                 if (!r.ok) throw new Error(r.status);
-                if (hbFails >= 2) {
-                    document.getElementById('serverOverlay').classList.remove('show');
-                    fetchData();
-                }
+                if (hbFails >= 2) { document.getElementById('serverOverlay').classList.remove('show'); loadNotes(); }
                 hbFails = 0;
             } catch (e) {
                 hbFails++;
@@ -2098,66 +1193,35 @@
             hbTimer = setTimeout(heartbeat, hbFails ? 5000 : 30000);
         }
         window.addEventListener('pagehide', () => navigator.sendBeacon('http://localhost:8000/api/closing'));
-        heartbeat();
 
-        fetchData();
-        loadNotes();
-        pollCatchup();
-        setInterval(updateNowLine, 60000);
-
-        // Refreshes never run while you are typing (a card prompt, the chat, or any focused text box),
-        // so half-typed text is not wiped. They wait and run once you finish.
+        // Reloads never run while you are typing, so half-typed text is not wiped
         function userBusy() {
             const a = document.activeElement;
-            if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'button'))) return true;
-            if ((document.getElementById('asstInput') || {}).value) return true;
-            return [...document.querySelectorAll('.email-card .input-prompt')].some(i => i.value.trim());
+            return !!(a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'button')));
         }
 
-        // Live updates: every 90 seconds, a cheap check (no AI) for new mail and new invites.
-        // New mail refreshes the dashboard after 60 quiet seconds, so a burst of email means one refresh.
-        // New invites only show a prompt here; nothing opens until you click Open.
+        // Every 30 seconds: reload the To-do and Notes tabs when the assistant changed them, and show its status
         let lastTodo = null;
         async function checkChanges() {
             try {
                 const r = await (await fetch('http://localhost:8000/api/changes', { cache: 'no-store' })).json();
-                if (r.status !== 'success') return;
-                renderInvites(r.changes.Invites);
-                if (lastMail !== null && r.changes.Mail && r.changes.Mail !== lastMail) refreshDue = Date.now() + 60000;
-                lastMail = r.changes.Mail;
-                // The assistant can add items to Running Notes: reload them when todo.json changes (not while typing)
-                if (lastTodo !== null && r.changes.Todo && r.changes.Todo !== lastTodo && !userBusy()) loadNotes();
-                if (r.changes.Todo) lastTodo = r.changes.Todo;
+                if (r.status === 'success') {
+                    if (lastTodo !== null && r.changes.Todo && r.changes.Todo !== lastTodo && !userBusy()) loadNotes();
+                    if (r.changes.Todo) lastTodo = r.changes.Todo;
+                    if (jotLoaded && r.changes.Notes && r.changes.Notes !== jotStamp && !userBusy()) loadJot();
+                }
+                const s = await (await fetch('http://localhost:8000/api/status', { cache: 'no-store' })).json();
+                const el = document.getElementById('asstStatus');
+                el.innerText = s.assistant ? 'Assistant: ' + s.assistant : '';
+                el.classList.toggle('alert', !!s.alert);
             } catch (e) {}
         }
-        setInterval(checkChanges, 90000);
 
-        // The 15-minute timer stays as a backup
-        const REFRESH_MS = 15 * 60 * 1000;
-        setInterval(() => { if (!refreshDue) refreshDue = Date.now(); }, REFRESH_MS);
-
-        setInterval(() => {
-            if (!refreshDue || Date.now() < refreshDue || refreshing) return;
-            if (userBusy()) { document.getElementById('lastUpdated').innerText = 'Refresh waiting (you are typing)'; return; }
-            fetchData();
-        }, 15000);
-
-        function renderInvites(list) {
-            const bar = document.getElementById('inviteBar');
-            list = list || [];
-            bar.style.display = list.length ? '' : 'none';
-            bar.innerHTML = list.map(v => `<div class="inv-row" data-key="${esc(v.Key)}">
-                <div class="inv-text"><span class="inv-label">Invite</span>${esc(v.Subject)} <span class="inv-meta">· ${esc(v.When)}${v.Recurring ? ' (recurring)' : ''}${v.Organizer ? ' · ' + esc(v.Organizer) : ''}</span></div>
-                <button class="btn-action" data-act="open">Open</button><button class="btn-refresh" data-act="dismiss">Dismiss</button></div>`).join('');
-            bar.querySelectorAll('.inv-row').forEach((row, i) => {
-                row.querySelectorAll('button').forEach(b => b.onclick = async () => {
-                    row.querySelectorAll('button').forEach(x => x.disabled = true);
-                    await postJson('/api/invite', { Action: b.dataset.act, Key: list[i].Key, Id: list[i].Id });
-                    row.remove();
-                    if (!bar.children.length) bar.style.display = 'none';
-                });
-            });
-        }
+        heartbeat();
+        loadNotes();
+        switchTab(['notes', 'jot', 'streams'].includes(lsGet('tab')) ? lsGet('tab') : 'notes');
+        checkChanges();
+        setInterval(checkChanges, 30000);
     </script>
 </body>
 </html>

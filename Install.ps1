@@ -64,9 +64,11 @@ if (-not (Test-Path $settings)) {
     $s = Get-Content (Join-Path $Base "settings.example.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     $name = Read-Host "  Your first name, as you sign emails"
     $desc = Read-Host "  One line about you, e.g. 'a researcher at Example Org'"
+    $mail = Read-Host "  Your work email address (used for test links and invites to yourself)"
     $dom  = Read-Host "  Your organization's email domain, e.g. example.org (blank to skip)"
     if ($name) { $s.UserName = $name; $s.SignName = $name }
     if ($desc) { $s.UserDescription = $desc }
+    if ($mail) { $s | Add-Member -NotePropertyName UserEmail -NotePropertyValue $mail.Trim() -Force }
     if ($dom)  { $s.InternalDomains = @($dom.Trim().TrimStart('@')) }
     $s | ConvertTo-Json -Depth 5 | Set-Content $settings -Encoding UTF8
     Ok "Saved settings.json"
@@ -74,8 +76,7 @@ if (-not (Test-Path $settings)) {
 
 # 5. Requirements
 Step "Checking requirements"
-if (Test-Path "Registry::HKEY_CLASSES_ROOT\Outlook.Application") { Ok "Classic Outlook found" }
-else { Warn "Classic Outlook not found. The new Outlook for Windows is not supported." }
+Write-Host "  Also needed, and not checkable here: the Microsoft 365 connector enabled in your Claude account (claude.ai > Settings > Connectors), and Teams access to your self-chat." -ForegroundColor DarkGray
 
 $browser = $null
 foreach ($b in "chrome.exe", "msedge.exe") {

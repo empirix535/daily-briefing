@@ -1,31 +1,31 @@
 {
-    "_help": "Copy this file to settings.json (Install.cmd does it for you) and fill in your details. settings.json stays on your PC and is not uploaded to GitHub.",
+    "_help": "Copy this file to settings.json (Install.cmd does it for you). settings.json stays on your PC and is not uploaded to GitHub.",
     "UserName": "Alex",
     "UserDescription": "a researcher at Example Org",
+    "UserEmail": "alex@example.org",
     "SignOff": "Best,",
     "SignName": "Alex",
-    "InternalDomains": [ "example.org" ],
-
-    "_help_contacts": "Nicknames the chat assistant understands. Say \"email Sam\" and it uses the address here.",
-    "Contacts": { "sam": "spark@example.org", "jordan": "jlee@example.org" },
-
-    "_help_models": "haiku is fastest; sonnet gives better answers but is slower and uses more of your Claude limit.",
-    "ClaudeModel": "haiku",
-    "CatchupModel": "sonnet",
-    "AssistantModel": "haiku",
-
-    "_help_invites": "AskAboutInvites lists unanswered meeting invites in the next InviteDays at the top of the dashboard, with Open and Dismiss buttons.",
-    "AskAboutInvites": true,
-    "InviteDays": 7,
-
-    "_help_assistant": "The assistant watches your Teams notes-to-self chat through its own minimized Chrome window, posts reminders there, and answers your messages. Active hours govern repeat nudges and (later) email alerts.",
+    "InternalDomains": [
+        "example.org"
+    ],
+    "_help_contacts": "Nicknames the assistant understands, for example \"email Sam\".",
+    "Contacts": {
+        "sam": "sam@example.org"
+    },
+    "_help_models": "SecretaryModel answers chat messages (haiku is fastest). SecretaryThinkModel runs mail and calendar scans, note clean-up, and the Notes editor.",
     "SecretaryEnabled": true,
     "SecretaryModel": "haiku",
-    "SecretaryDays": [ "Mon", "Tue", "Wed", "Thu", "Fri" ],
+    "SecretaryThinkModel": "sonnet",
+    "SecretaryDays": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri"
+    ],
     "SecretaryStart": "08:00",
     "SecretaryEnd": "18:00",
-
-    "_help_other": "CloseOutlookOnExit quits Outlook when you close the dashboard (never while a draft window is open). Port only needs changing if 8000 is taken.",
-    "CloseOutlookOnExit": true,
+    "SecretaryMaxCallsPerDay": 250,
+    "_help_streams": "Optional. Full path to your streams.json (Streams tab). Defaults to <OneDrive>\\root\\_admin\\streams.json.",
     "Port": 8000
 }

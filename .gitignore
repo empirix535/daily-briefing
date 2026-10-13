@@ -22,3 +22,7 @@ launch_dashboard.vbs
 *.zip
 Thumbs.db
 desktop.ini
+
+# Local archives and tooling
+app-archive-*/
+Claude outputs/
