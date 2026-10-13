@@ -290,6 +290,17 @@ $script:Ask = $null; $r = Say "reply to 7"
 Check "reply to an unknown number says so" ($r -match "don't have a numbered email 7") $r
 $script:Ask = $null
 
+# Numbered FYI roundup; the reply list continues the numbering
+$state.FyiSlot = ""
+$state.FyiItems = @([pscustomobject]@{ key = "F1"; line = "Lee says the site visit moved to Monday."; from = "Lee"; subject = "Visit"; link = "https://x/f1" },
+                    [pscustomobject]@{ key = "F2"; line = "Surina says the GOS session is Wednesday."; from = "Surina"; subject = "GOS"; link = "https://x/f2" })
+$state.RespTrack = @([pscustomobject]@{ key = "R9"; from = "Ana"; subject = "Review"; line = "Ana needs your sign-off."; link = "https://x/r9"; flagged = '2026-10-12T07:00:00'; asks = 0; lastAsk = ""; skip = $false })
+$script:ClaudeQueue.Enqueue((Json @{ results = @() }))
+$script:Out.Clear(); Invoke-FyiBatch ([datetime]'2026-10-12 12:05')
+$a = [string]$script:Out[0]; $b = [string]$script:Out[1]
+Check "FYI roundup is numbered with a blank line between items" ($a -match '1\. Lee says' -and $a -match '(?s)1\. Lee[^\n]*\n\n2\. Surina') $a
+Check "the reply list continues after the FYI numbers and both are addressable" ($b -match '3\. Ana needs' -and $b -match 'reply to 3' -and @($state.LastAlert).Count -eq 3 -and @($state.LastAlert)[2].key -eq 'R9' -and @($state.LastAlert)[0].key -eq 'F1') $b
+
 # Pre-meeting prompt and brief
 $script:Ask = $null
 Save-Meetings (ConvertTo-MeetingList @(@{ subject = "Budget sync"; start = $s1; end = $e1; allDay = $false; people = @("Sophie"); declined = $false; location = ""; link = "" },

@@ -44,7 +44,7 @@ $Commands = @(
     @{ When = 'Late'; Area = 'EMAIL'; Use = 'unanswered (email still waiting on your reply)'; Rx = '^(?i)(?:unanswered|unreplied|owed replies)$'
        Do = { Send-ReplyCheck (Get-Date) -Asked } }
     @{ When = 'Late'; Area = 'EMAIL'; Use = 'fyi (the queued FYI email)'; Rx = '^(?i)fyi$'
-       Do = { Send-FyiBatch -Asked } }
+       Do = { Send-FyiBatch -Asked; $script:RoundupBase = 0 } }
     @{ When = 'Late'; Area = 'CALENDAR'; Use = 'prep (brief for the meeting I just asked about)'; Rx = '^(?i)prep(?:\s+(?:brief|me))?$'
        Do = { Send-PrepBrief $state.PrepLast } }
     @{ When = 'Late'; Area = 'CALENDAR'; Use = 'test event link (one pre-filled sample to try)'; Rx = '^(?i)test (?:event|calendar) link$'

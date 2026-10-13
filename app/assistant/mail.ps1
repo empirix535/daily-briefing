@@ -112,7 +112,7 @@ function Invoke-MailScan([datetime]$Now, [string]$Mode) {
     if ($seen.Count -gt 500) { foreach ($k in @($seen.Keys | Sort-Object { $seen[$_] } | Select-Object -First ($seen.Count - 400))) { $seen.Remove($k) } }
     if ($fyi.Count) {
         $q = @($state.FyiItems | Where-Object { $_ })
-        foreach ($t in $fyi) { $q = @($q | Where-Object { [string]$_.key -ne [string]$t.key }) + [pscustomobject]@{ key = [string]$t.key; line = (Format-MailLine $t) } }
+        foreach ($t in $fyi) { $q = @($q | Where-Object { [string]$_.key -ne [string]$t.key }) + [pscustomobject]@{ key = [string]$t.key; line = (Format-MailLine $t); from = [string]$t.from; subject = [string]$t.subject; link = [string]$t.link } }
         $state.FyiItems = $q
     }
     Save-State
@@ -176,7 +176,15 @@ function Send-FyiBatch([switch]$Asked) {
     $q = @($state.FyiItems | Where-Object { $_ })
     $state.FyiItems = @(); Save-State
     if (-not $q.Count) { if ($Asked) { Send-Chat "No FYI email waiting." }; return }
-    Send-Chat ("FYI email since the last roundup:`n" + (($q | ForEach-Object { "- " + [string]$_.line }) -join "`n`n"))
+    # Numbered like an alert, so "what does 2 say" and "make a todo from 3" work on the roundup
+    $n = 0; $store = @(); $lines = @()
+    foreach ($i in $q) {
+        $n++
+        $lines += "$n. " + [string]$i.line
+        $store += [pscustomobject]@{ n = $n; key = [string]$i.key; from = [string]$i.from; subject = [string]$i.subject; link = [string]$i.link }
+    }
+    $state.LastAlert = $store; $script:RoundupBase = $n; Save-State
+    Send-Chat ("FYI email since the last roundup:`n`n" + ($lines -join "`n`n") + "`n`nAsk about any number, or say ""make a todo from $(if ($n -gt 1) { '2' } else { '1' })"".")
 }
 function Invoke-FyiBatch([datetime]$Now) {
     if (-not (@($Config.SecretaryDays) -contains $Now.DayOfWeek.ToString().Substring(0, 3))) { return }
@@ -187,13 +195,16 @@ function Invoke-FyiBatch([datetime]$Now) {
     }
     if (-not $slot -or $state.FyiSlot -eq $slot) { return }
     $state.FyiSlot = $slot; Save-State
+    $script:RoundupBase = 0
     Send-FyiBatch
     try { Send-ReplyCheck $Now } catch { Write-Log "Reply check failed: $($_.Exception.Message)" "WARN" }
+    $script:RoundupBase = 0
 }
 
 # ------------------------------------------------------------------ unanswered email (asked at the noon and 4 PM roundups)
 # Every thread the scan flags "Requires Response" (addressed to you) is tracked. At the roundup, one connector call checks
 # which ones you have since answered. The rest are listed once, and you say what you plan to do. Nothing posts when nothing is open.
+$script:RoundupBase = 0
 $ReplyMinHours = 3     # a flag must be at least this old before the roundup asks about it
 $ReplyMaxItems = 5     # most items per roundup
 $ReplyReaskDays = 3    # one second ask after this many days, then never again
@@ -249,7 +260,8 @@ function Send-ReplyCheck([datetime]$Now = (Get-Date), [switch]$Asked) {
     foreach ($k in $done) { Remove-ReplyTrack $k }
     $open = @($c | Where-Object { $done -notcontains [string]$_.key })
     if (-not $open.Count) { if ($Asked) { Send-Chat "You have answered everything I was watching." }; return }
-    $n = 0; $store = @(); $lines = @()
+    $base = [int]$script:RoundupBase   # the FYI list posted just before this one, if any; numbering continues after it
+    $n = $base; $store = @($state.LastAlert | Where-Object { $_ -and $base -gt 0 -and [int]$_.n -le $base }); $lines = @()
     foreach ($r in $open) {
         $n++
         $lines += "$n. $($r.line) (flagged $(([datetime][string]$r.flagged).ToString('ddd h:mm tt', $Inv)))"
@@ -259,7 +271,7 @@ function Send-ReplyCheck([datetime]$Now = (Get-Date), [switch]$Asked) {
     }
     $state.LastAlert = $store; Save-State
     Send-Chat ("You haven't replied to $(if ($n -eq 1) { 'this email' } else { 'these emails' }) yet:`n" + ($lines -join "`n") +
-        "`nAre you planning to reply? Say ""make a todo from 1 by Friday"" to be reminded, or ""skip $(if ($n -eq 1) { '1' } else { '2' })"" (or ""skip all"") and I will stop asking.")
+        "`nAre you planning to reply? Say ""reply to $($base + 1) by Friday"" to be reminded, or ""skip $($base + 1)"" (or ""skip all"") and I will stop asking.")
 }
 
 # "skip 2", "skip 1 and 3", "skip all": stop asking about numbered items from the latest list
