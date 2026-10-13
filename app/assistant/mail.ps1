@@ -45,7 +45,7 @@ Category:
 - "Noise": spam, marketing, external newsletters, and mass mailings; routine messages from retirement accounts, banks, or health insurance unless they need action; conference and professional-society emails unless they concern $U's own applications, submissions, reviews, registrations, invoices, or payments; automated notifications that need nothing from $U. A person writing to $U directly about work is never Noise. Journal emails about $U's own manuscripts are never Noise (revision requests, reviewer invitations, and proofs are Requires Response).
 "direct" is true when $U is on the To line of the newest message and false when $U is only on Cc, Bcc, or a distribution list.
 "resolved" is true when $U already replied after the newest message, or the request was clearly settled.
-"line" is written to $U in the second person: say "you" and "your", never $U's name. "line" for Requires Response: one sentence saying who wants what from you, in plain words, for example "Sophie wants your thoughts on section 3 of the budget doc." Name people, documents, numbers, and dates. Never write vague topic labels. "line" for FYI: one sentence on what the message tells $U. Leave "line" empty for Noise.
+"line" is written to $U in the second person: say "you" and "your", never $U's name. "line" for Requires Response: one sentence saying who wants what from you, in plain words, for example "Sophie wants your thoughts on section 3 of the budget doc." Name people, documents, numbers, and dates. Never write vague topic labels. "line" for FYI: one sentence of at most 30 words on what the message tells you, in the second person, for example "Lee says the site visit moved to Monday." Never refer to $U by name. Leave "line" empty for Noise.
 
 STEP 3. $(Get-MeetingsPromptPart $Now)
 
@@ -176,7 +176,7 @@ function Send-FyiBatch([switch]$Asked) {
     $q = @($state.FyiItems | Where-Object { $_ })
     $state.FyiItems = @(); Save-State
     if (-not $q.Count) { if ($Asked) { Send-Chat "No FYI email waiting." }; return }
-    Send-Chat ("FYI email since the last roundup:`n" + (($q | ForEach-Object { "- " + [string]$_.line }) -join "`n"))
+    Send-Chat ("FYI email since the last roundup:`n" + (($q | ForEach-Object { "- " + [string]$_.line }) -join "`n`n"))
 }
 function Invoke-FyiBatch([datetime]$Now) {
     if (-not (@($Config.SecretaryDays) -contains $Now.DayOfWeek.ToString().Substring(0, 3))) { return }
