@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Path (Join-Path $data "notes") -Force | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $data "notes\General.md"), "", (New-Object System.Text.UTF8Encoding($false)))
 
 $sync = [hashtable]::Synchronized(@{
-    Config = @{ UserName = "Wael"; UserDescription = "a researcher"; ClaudePath = ""; SecretaryModel = "haiku"; SecretaryThinkModel = "sonnet"
+    Config = @{ UserName = "Wael"; UserEmail = "wmoussa@fhi360.org"; UserDescription = "a researcher"; ClaudePath = ""; SecretaryModel = "haiku"; SecretaryThinkModel = "sonnet"
                 SecretaryPollSec = 30; SecretaryNotesPollSec = 10; SecretaryDebugPort = 9222; SecretaryChromePath = ""
                 SecretaryDays = @("Mon", "Tue", "Wed", "Thu", "Fri"); SecretaryStart = "08:00"; SecretaryEnd = "18:00"; SecretaryMaxCallsPerDay = 250 }
     Root = $data; BaseDir = $data; AppDir = $AppDir; LogPath = (Join-Path $data "test.log"); AssistantTestMode = $true
