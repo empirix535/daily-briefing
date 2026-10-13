@@ -416,7 +416,10 @@ $miPause = New-Object System.Windows.Forms.ToolStripMenuItem("Pause assistant")
 $miPause.add_Click({ $sync.SecretaryPauseToggle = $true })
 $miShowTeams = New-Object System.Windows.Forms.ToolStripMenuItem("Show Teams window")
 $miShowTeams.add_Click({ $sync.SecretaryShowWindow = -not [bool]$sync.SecretaryShowWindow; $miShowTeams.Checked = [bool]$sync.SecretaryShowWindow })
-if ($sec) { [void]$menu.Items.Add($miPause); [void]$menu.Items.Add($miShowTeams) }
+$miPinChat = New-Object System.Windows.Forms.ToolStripMenuItem("Pin chat window")
+$miPinChat.add_Click({ $sync.SecretaryPinToggle = $true; $miPinChat.Checked = -not $miPinChat.Checked })
+$menu.add_Opening({ $miPinChat.Checked = [bool]$sync.SecretaryChatPin })
+if ($sec) { [void]$menu.Items.Add($miPause); [void]$menu.Items.Add($miShowTeams); [void]$menu.Items.Add($miPinChat) }
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 $miRestart = $menu.Items.Add("Restart Server")
 $miRestart.add_Click({ Stop-Server "Restart requested from tray" $true })

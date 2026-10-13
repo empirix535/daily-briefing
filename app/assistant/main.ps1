@@ -41,12 +41,23 @@ function Invoke-Step {
         try { Send-Chat $(if ($state.Paused) { "Paused from the tray. Type resume to turn me back on." } else { "Back on." }) } catch {}
     }
     $sync.SecretaryPaused = [bool]$state.Paused
+    if ($sync.SecretaryPinToggle) {
+        $sync.SecretaryPinToggle = $false
+        $state.ChatPin = -not [bool]$state.ChatPin
+        if ($state.ChatPin) { $script:PinForce = $true }
+        Save-State
+    }
+    $sync.SecretaryChatPin = [bool]$state.ChatPin
 
     # Keep the Teams window hidden unless Wael asked to see it (tray) or Teams needs a sign-in
     $wantShow = [bool]$sync.SecretaryShowWindow
     $tgt = Get-TeamsTarget
     if ($tgt -and $tgt.url -match 'login\.microsoftonline') { $wantShow = $true }
-    try { Set-TeamsWindow $wantShow } catch { Write-Log "Could not change the Teams window: $($_.Exception.Message)" "WARN" }
+    try {
+        if ($wantShow) { Set-TeamsWindow $true }
+        elseif ($state.ChatPin) { Set-TeamsPinned $true }
+        else { Set-TeamsPinned $false; Set-TeamsWindow $false }
+    } catch { Write-Log "Could not change the Teams window: $($_.Exception.Message)" "WARN" }
     if (-not $tgt) {
         if (((Get-Date) - $script:LastLaunch).TotalMinutes -ge 2) { $script:LastLaunch = Get-Date; Start-TeamsBrowser }
         Set-Status "Starting the Teams window."

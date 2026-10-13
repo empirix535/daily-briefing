@@ -19,6 +19,15 @@ public static class SecWin {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    public static bool Minimized(IntPtr h) { return IsIconic(h); }
+    public static int[] Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return new int[] { r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top }; }
+    // Move, size, and keep above other windows (or release); never takes focus
+    public static void Place(IntPtr h, int x, int y, int w, int ht, bool top) { SetWindowPos(h, new IntPtr(top ? -1 : -2), x, y, w, ht, 0x10 | 0x40); }
+    public static void Top(IntPtr h, bool top) { SetWindowPos(h, new IntPtr(top ? -1 : -2), 0, 0, 0, 0, 0x1 | 0x2 | 0x10); }
     public static IntPtr[] Find(uint pid) {
         var list = new List<IntPtr>();
         EnumWindows(delegate(IntPtr h, IntPtr l) {
@@ -52,6 +61,43 @@ function Set-TeamsWindow([bool]$Show) {
     }
 }
 
+# Pinned chat window: the same Chrome window, small, on top of other windows, and back where you left it.
+# Size and place it once by hand; the assistant remembers it (state.ChatRect) and restores it after a restart.
+try { Add-Type -AssemblyName System.Windows.Forms } catch {}
+$script:PinHandle = [IntPtr]::Zero
+$script:PinForce  = $false
+function Get-ChatRect {
+    $screens = @([System.Windows.Forms.Screen]::AllScreens)
+    $r = @(([string]$state.ChatRect).Split(',') | Where-Object { $_ -match '^-?\d+$' } | ForEach-Object { [int]$_ })
+    if ($r.Count -eq 4 -and $r[2] -gt 250 -and $r[3] -gt 250) {
+        $box = New-Object System.Drawing.Rectangle($r[0], $r[1], $r[2], $r[3])
+        if (@($screens | Where-Object { $_.WorkingArea.IntersectsWith($box) }).Count) { return $r }
+    }
+    $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $w = 460; $h = [math]::Min(760, $wa.Height - 80)
+    return @(($wa.Right - $w - 12), ($wa.Top + 40), $w, $h)
+}
+function Set-TeamsPinned([bool]$On) {
+    $procId = Get-TeamsChromePid
+    if (-not $procId) { return }
+    foreach ($h in [SecWin]::Find($procId)) {
+        if ($On) {
+            if (-not $script:PinHandle.Equals($h) -or $script:PinForce) {
+                $r = Get-ChatRect
+                [void][SecWin]::ShowWindow($h, 9)
+                [SecWin]::Place($h, $r[0], $r[1], $r[2], $r[3], $true)
+                $script:PinHandle = $h; $script:PinForce = $false
+            } elseif ([SecWin]::IsWindowVisible($h) -and -not [SecWin]::Minimized($h)) {
+                $r = [SecWin]::Rect($h)
+                $txt = $r -join ','
+                if ($r[2] -gt 250 -and $r[3] -gt 250 -and $txt -ne [string]$state.ChatRect) { $state.ChatRect = $txt; Save-State }
+            }
+        } elseif ($script:PinHandle.Equals($h)) {
+            [SecWin]::Top($h, $false); $script:PinHandle = [IntPtr]::Zero
+        }
+    }
+}
+
 function Start-TeamsBrowser {
     $chrome = $Config.SecretaryChromePath
     if (-not $chrome -or -not (Test-Path $chrome)) {
@@ -61,7 +107,7 @@ function Start-TeamsBrowser {
     }
     if (-not $chrome) { throw "Chrome not found. Set SecretaryChromePath in settings.json." }
     Start-Process -FilePath $chrome -WindowStyle Minimized -ArgumentList @(
-        "--remote-debugging-port=$Port", "--user-data-dir=`"$ProfileDir`"", "--no-first-run", "--no-default-browser-check", $ChatUrl)
+        "--remote-debugging-port=$Port", "--user-data-dir=`"$ProfileDir`"", "--no-first-run", "--no-default-browser-check", "--app=$ChatUrl")   # app mode: no tab strip or address bar
     Write-Log "Started the Teams window."
 }
 
