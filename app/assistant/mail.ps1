@@ -5,7 +5,8 @@
 #
 # State keys: SeenMail (thread signatures already handled), FyiItems (queued FYI lines), LastAlert (numbered list of the
 # latest alert), LastScan (last successful scan), ScanSlot (wall-clock slot already tried), GreetDay (day of the last
-# greeting), ScanFailAt (start of a failure streak), FyiSlot, ScopeWarnDay.
+# greeting), ScanFailAt (start of a failure streak), FyiSlot, ScopeWarnDay, RespTrack (needs-response threads waiting on
+# your reply, checked at the noon and 4 PM roundups).
 
 $FyiTimes = @('12:00', '16:00')
 
@@ -37,11 +38,12 @@ STEP 1. Call get_granted_scopes. If it fails, return {"health": {"ok": false, "e
 STEP 2. MAIL. Use outlook_email_search for messages received in the inbox since $($Since.ToString('yyyy-MM-ddTHH:mm', $Inv)) (local time). Ignore messages $U sent, and junk and deleted items. Group them by conversation. Already handled (key|latest); skip these without opening them:
 $seenText
 For each remaining conversation that is not clearly Noise from its preview, open it with read_resource so you know the whole thread before you write about it.
-Each thread object: {"key": "the conversation or thread id from the search", "latest": "received time of the newest message, YYYY-MM-DDTHH:MM local", "from": "sender first name", "subject": "", "category": "Requires Response|FYI|Noise", "resolved": false, "line": "", "deadline": "YYYY-MM-DD or empty", "doc": "link to the document or attachment page the message refers to, else empty", "link": "web link to the message or thread, else empty"}
+Each thread object: {"key": "the conversation or thread id from the search", "latest": "received time of the newest message, YYYY-MM-DDTHH:MM local", "from": "sender first name", "subject": "", "category": "Requires Response|FYI|Noise", "resolved": false, "line": "", "deadline": "YYYY-MM-DD or empty", "doc": "link to the document or attachment page the message refers to, else empty", "link": "web link to the message or thread, else empty", "direct": true}
 Category:
 - "Requires Response": $U needs to reply, decide, review, approve, submit, or act.
 - "FYI": relevant work or personal information with no action needed.
 - "Noise": spam, marketing, external newsletters, and mass mailings; routine messages from retirement accounts, banks, or health insurance unless they need action; conference and professional-society emails unless they concern $U's own applications, submissions, reviews, registrations, invoices, or payments; automated notifications that need nothing from $U. A person writing to $U directly about work is never Noise. Journal emails about $U's own manuscripts are never Noise (revision requests, reviewer invitations, and proofs are Requires Response).
+"direct" is true when $U is on the To line of the newest message and false when $U is only on Cc, Bcc, or a distribution list.
 "resolved" is true when $U already replied after the newest message, or the request was clearly settled.
 "line" is written to $U in the second person: say "you" and "your", never $U's name. "line" for Requires Response: one sentence saying who wants what from you, in plain words, for example "Sophie wants your thoughts on section 3 of the budget doc." Name people, documents, numbers, and dates. Never write vague topic labels. "line" for FYI: one sentence on what the message tells $U. Leave "line" empty for Noise.
 
@@ -103,7 +105,8 @@ function Invoke-MailScan([datetime]$Now, [string]$Mode) {
         $sig = "$($t.key)|$($t.latest)"
         if ($seen.ContainsKey($sig)) { continue }
         $seen[$sig] = $Now.Ticks
-        if ([string]$t.category -eq 'Requires Response' -and -not [bool]$t.resolved) { $need += $t }
+        if ([string]$t.category -eq 'Requires Response' -and -not [bool]$t.resolved) { $need += $t; Add-ReplyTrack $t $Now }
+        elseif ([string]$t.category -eq 'Requires Response' -and [bool]$t.resolved) { Remove-ReplyTrack ([string]$t.key) }
         elseif ([string]$t.category -eq 'FYI') { $fyi += $t }
     }
     if ($seen.Count -gt 500) { foreach ($k in @($seen.Keys | Sort-Object { $seen[$_] } | Select-Object -First ($seen.Count - 400))) { $seen.Remove($k) } }
@@ -185,6 +188,92 @@ function Invoke-FyiBatch([datetime]$Now) {
     if (-not $slot -or $state.FyiSlot -eq $slot) { return }
     $state.FyiSlot = $slot; Save-State
     Send-FyiBatch
+    try { Send-ReplyCheck $Now } catch { Write-Log "Reply check failed: $($_.Exception.Message)" "WARN" }
+}
+
+# ------------------------------------------------------------------ unanswered email (asked at the noon and 4 PM roundups)
+# Every thread the scan flags "Requires Response" (addressed to you) is tracked. At the roundup, one connector call checks
+# which ones you have since answered. The rest are listed once, and you say what you plan to do. Nothing posts when nothing is open.
+$ReplyMinHours = 3     # a flag must be at least this old before the roundup asks about it
+$ReplyMaxItems = 5     # most items per roundup
+$ReplyReaskDays = 3    # one second ask after this many days, then never again
+
+function Get-ReplyTrack { return @($state.RespTrack | Where-Object { $_ }) }
+function Add-ReplyTrack($T, [datetime]$Now) {
+    if ($T.direct -is [bool] -and -not $T.direct) { return }
+    $keep = @(Get-ReplyTrack | Where-Object { [string]$_.key -ne [string]$T.key -and ([datetime][string]$_.flagged) -gt $Now.AddDays(-14) })
+    $rec = [pscustomobject]@{ key = [string]$T.key; from = [string]$T.from; subject = [string]$T.subject; line = (Format-MailLine $T)
+        link = [string]$T.link; flagged = $Now.ToString('s'); asks = 0; lastAsk = ""; skip = $false }
+    $state.RespTrack = @($keep + $rec | Select-Object -Last 40)
+}
+function Remove-ReplyTrack([string]$Key) { $state.RespTrack = @(Get-ReplyTrack | Where-Object { [string]$_.key -ne $Key }) }
+
+function Get-ReplyCandidates([datetime]$Now, [bool]$All) {
+    $links = @()
+    try { $links = @((Get-Todos) | Where-Object { [string]$_.mailLink } | ForEach-Object { [string]$_.mailLink }) } catch { }
+    $out = @()
+    foreach ($r in (Get-ReplyTrack)) {
+        if ([bool]$r.skip) { continue }
+        if ([string]$r.link -and $links -contains [string]$r.link) { continue }   # already a to-do
+        if (-not $All) {
+            if (([datetime][string]$r.flagged) -gt $Now.AddHours(-$ReplyMinHours)) { continue }
+            if ([int]$r.asks -ge 2) { continue }
+            if ([int]$r.asks -eq 1 -and ([datetime][string]$r.lastAsk) -gt $Now.AddDays(-$ReplyReaskDays)) { continue }
+        }
+        $out += $r
+    }
+    return @($out | Sort-Object { [datetime][string]$_.flagged } | Select-Object -First $ReplyMaxItems)
+}
+
+# Returns the keys $U has already answered, or $null when the check failed
+function Get-RepliedKeys($Cands, [datetime]$Now) {
+    $list = ($Cands | ForEach-Object { "- key=$($_.key) | from $($_.from) | $($_.subject) | flagged $(([datetime][string]$_.flagged).ToString('yyyy-MM-ddTHH:mm', $Inv)) | link $($_.link)" }) -join "`n"
+    $prompt = @"
+You are checking $U's Outlook for $U. Use read tools only (outlook_email_search, read_resource). Now: $($Now.ToString("dddd, MMMM d, yyyy h:mm tt", $Inv)).
+For each thread below, decide whether $U has already dealt with it: $U sent a reply in that thread after the flagged time, or the request was clearly settled afterwards. Open the thread with read_resource (or search Sent Items by subject and recipient) to see. When you cannot tell, answer false.
+$list
+Answer with one JSON object and nothing else: {"results": [{"key": "the key as given", "replied": true}]}
+"@
+    $res = ConvertFrom-ModelJson (Invoke-SecConnector $prompt)
+    return @(@($res.results) | Where-Object { $_ -and [bool]$_.replied } | ForEach-Object { [string]$_.key })
+}
+
+function Send-ReplyCheck([datetime]$Now = (Get-Date), [switch]$Asked) {
+    if (-not $Asked -and -not (@($Config.SecretaryDays) -contains $Now.DayOfWeek.ToString().Substring(0, 3))) { return }
+    $c = @(Get-ReplyCandidates $Now ([bool]$Asked))
+    if (-not $c.Count) { if ($Asked) { Send-Chat "Nothing is waiting on a reply from you." }; return }
+    if (-not (Test-CallBudget)) { if ($Asked) { Send-Chat "I've hit today's Claude call limit, so I can't check your replies until tomorrow." }; return }
+    $done = $null
+    try { $done = @(Get-RepliedKeys $c $Now) }
+    catch { Write-Log "Reply check could not run: $($_.Exception.Message)" "WARN"; if ($Asked) { Send-Chat "I couldn't check your sent mail: $($_.Exception.Message)" }; return }
+    foreach ($k in $done) { Remove-ReplyTrack $k }
+    $open = @($c | Where-Object { $done -notcontains [string]$_.key })
+    if (-not $open.Count) { if ($Asked) { Send-Chat "You have answered everything I was watching." }; return }
+    $n = 0; $store = @(); $lines = @()
+    foreach ($r in $open) {
+        $n++
+        $lines += "$n. $($r.line) (flagged $(([datetime][string]$r.flagged).ToString('ddd h:mm tt', $Inv)))"
+        $store += [pscustomobject]@{ n = $n; key = [string]$r.key; from = [string]$r.from; subject = [string]$r.subject; link = [string]$r.link }
+        $rec = Get-ReplyTrack | Where-Object { [string]$_.key -eq [string]$r.key } | Select-Object -First 1
+        if ($rec) { $rec.asks = [int]$rec.asks + 1; $rec.lastAsk = $Now.ToString('s') }
+    }
+    $state.LastAlert = $store; Save-State
+    Send-Chat ("You haven't replied to $(if ($n -eq 1) { 'this email' } else { 'these emails' }) yet:`n" + ($lines -join "`n") +
+        "`nAre you planning to reply? Say ""make a todo from 1 by Friday"" to be reminded, or ""skip $(if ($n -eq 1) { '1' } else { '2' })"" (or ""skip all"") and I will stop asking.")
+}
+
+# "skip 2", "skip 1 and 3", "skip all": stop asking about numbered items from the latest list
+function Set-ReplySkip([string]$Which) {
+    $alert = @($state.LastAlert | Where-Object { $_ })
+    if (-not $alert.Count) { Send-Chat "There is no numbered list to skip from."; return }
+    $nums = if ($Which -match '^(?i)all$') { @($alert | ForEach-Object { [int]$_.n }) } else { @([regex]::Matches($Which, '\d+') | ForEach-Object { [int]$_.Value }) }
+    $hit = @()
+    foreach ($a in @($alert | Where-Object { $nums -contains [int]$_.n })) {
+        $rec = Get-ReplyTrack | Where-Object { [string]$_.key -eq [string]$a.key } | Select-Object -First 1
+        if ($rec) { $rec.skip = $true; $hit += [int]$a.n }
+    }
+    Save-State
+    Send-Chat $(if ($hit.Count) { "Okay, I won't ask about " + ($hit -join ", ") + " again. A new message in that thread brings it back." } else { "I couldn't match that to the latest list." })
 }
 
 # ------------------------------------------------------------------ questions about email

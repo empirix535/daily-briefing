@@ -176,6 +176,7 @@ Check "greeting scan succeeds and greets" ($ok -and $txt -match 'Good (morning|a
 Check "greeting brief lists meetings and to-dos from the cache (no extra call)" ($txt -match 'Meetings today' -and $txt -match 'Budget sync' -and $txt -match 'All day: Office closed' -and $txt -match 'To-dos for today|No to-dos due') $txt
 Check "alert is numbered, action-framed, with deadline and doc" ($txt -match '1\. Sophie wants your thoughts on section 3' -and $txt -match '\(by Tue Oct 20\)' -and $txt -match 'Doc: https://x/doc1' -and $txt -match '2\. Ana needs') $txt
 Check "resolved and noise are left out; FYI is queued" ($txt -notmatch 'Raj' -and $txt -notmatch 'Digest' -and @($state.FyiItems).Count -eq 1 -and @($state.LastAlert).Count -eq 2) $txt
+Check "needs-response threads are tracked for the roundup; resolved and FYI are not" ((@(Get-ReplyTrack | ForEach-Object { $_.key }) -join ',') -eq 'T1,T2') ((@(Get-ReplyTrack | ForEach-Object { $_.key }) -join ','))
 Check "scan saved the meeting cache and greeting day" ((Get-CachedMeetings).Count -eq 2 -and $state.GreetDay -eq $now.ToString('yyyy-MM-dd')) ""
 Check "scan prompt checks the connector first and stays read-only" ($script:Prompts[-1] -match 'get_granted_scopes' -and $script:Prompts[-1] -match 'read tools only') ""
 
@@ -248,6 +249,46 @@ $state.FyiSlot = ""; $state.FyiItems = @([pscustomobject]@{ key = "T3"; line = "
 $script:Out.Clear(); Invoke-FyiBatch ([datetime]'2026-10-12 12:05')
 Check "noon slot sends the batch once" ((@($script:Out) -join ' ') -match 'FYI email since') ""
 $script:Out.Clear(); Invoke-FyiBatch ([datetime]'2026-10-12 12:20'); Check "and not twice" (@($script:Out).Count -eq 0) ""
+
+# Unanswered email: tracked at scan time, checked at the roundup
+$state.RespTrack = @(
+    [pscustomobject]@{ key = "R1"; from = "Sophie"; subject = "Budget"; line = "Sophie wants your thoughts on section 3."; link = "https://x/r1"; flagged = '2026-10-12T08:00:00'; asks = 0; lastAsk = ""; skip = $false },
+    [pscustomobject]@{ key = "R2"; from = "Ana"; subject = "Review"; line = "Ana needs your sign-off on the survey tool."; link = "https://x/r2"; flagged = '2026-10-12T08:30:00'; asks = 0; lastAsk = ""; skip = $false },
+    [pscustomobject]@{ key = "R3"; from = "Lee"; subject = "Fresh"; line = "Lee wants a number."; link = "https://x/r3"; flagged = '2026-10-12T11:30:00'; asks = 0; lastAsk = ""; skip = $false },
+    [pscustomobject]@{ key = "R4"; from = "Raj"; subject = "Todo"; line = "Raj wants a date."; link = "https://x/r4"; flagged = '2026-10-12T08:00:00'; asks = 0; lastAsk = ""; skip = $false })
+[void](Add-TodoItems @(@{ text = "Reply to Raj"; mailLink = "https://x/r4" }))
+$script:ClaudeQueue.Enqueue((Json @{ results = @(@{ key = "R1"; replied = $true }, @{ key = "R2"; replied = $false }) }))
+$script:Out.Clear(); $script:Prompts.Clear(); Send-ReplyCheck ([datetime]'2026-10-12 12:00')
+$txt = @($script:Out) -join ' '
+Check "roundup asks only about unanswered, old enough, not already a to-do" ($txt -match "haven't replied" -and $txt -match 'Ana needs' -and $txt -notmatch 'Sophie' -and $txt -notmatch 'Lee wants' -and $txt -notmatch 'Raj') $txt
+Check "answered thread leaves the tracker; asked one is counted" (@(Get-ReplyTrack | Where-Object { $_.key -eq 'R1' }).Count -eq 0 -and (Get-ReplyTrack | Where-Object { $_.key -eq 'R2' }).asks -eq 1 -and @($state.LastAlert)[0].key -eq 'R2') ""
+$script:ClaudeQueue.Enqueue((Json @{ results = @() }))
+$script:Out.Clear(); Send-ReplyCheck ([datetime]'2026-10-12 16:00')
+$txt = @($script:Out) -join ' '
+Check "at 4 PM an earlier ask is not repeated, and the newly old item is asked" ($txt -match 'Lee wants' -and $txt -notmatch 'Ana needs') $txt
+$script:Out.Clear(); $script:Prompts.Clear(); Send-ReplyCheck ([datetime]'2026-10-12 16:05')
+Check "with nothing new to ask, no call is made and nothing posts" (@($script:Out).Count -eq 0 -and $script:Prompts.Count -eq 0) (@($script:Out) -join ' ')
+$script:ClaudeQueue.Enqueue((Json @{ results = @() }))
+$script:Out.Clear(); Send-ReplyCheck ([datetime]'2026-10-15 12:00')
+Check "a second ask comes after three days" ((@($script:Out) -join ' ') -match 'Ana needs') (@($script:Out) -join ' ')
+$script:Out.Clear(); $r = Say "skip 1"
+Check "skip stops the asking" ($r -match "won't ask about 1" -and (Get-ReplyTrack | Where-Object { $_.key -eq 'R2' }).skip -eq $true) $r
+foreach ($r in (Get-ReplyTrack)) { $r.skip = $true }
+$script:Out.Clear(); Send-ReplyCheck ([datetime]'2026-10-20 12:00')
+Check "a skipped item stays quiet" (@($script:Out).Count -eq 0) ""
+$script:Out.Clear(); $r = Say "unanswered"
+Check "unanswered on demand answers even when nothing is open" ($r -match 'Nothing is waiting') $r
+
+# "reply to N by DAY" makes a reply to-do with the email link
+$state.LastAlert = @([pscustomobject]@{ n = 1; key = "Q1"; from = "Sophie"; subject = "Budget"; link = "https://x/q1" })
+$script:Out.Clear(); $script:Ask = $null; $r = Say "reply to 1 by friday"
+$td = @((Get-Todos) | Where-Object { [string]$_.text -eq 'Reply to Sophie: Budget' }) | Select-Object -First 1
+Check "reply to 1 by friday adds a dated reply to-do with the link" ($td -and $td.mailLink -eq 'https://x/q1' -and $td.due -match '^\d{4}-\d{2}-\d{2}$') $r
+$script:Ask = $null; $r = Say "reply 1"
+Check "reply 1 with no date asks when" ($r -match 'When do you want') $r
+$script:Ask = $null; $r = Say "reply to 7"
+Check "reply to an unknown number says so" ($r -match "don't have a numbered email 7") $r
+$script:Ask = $null
 
 # Pre-meeting prompt and brief
 $script:Ask = $null

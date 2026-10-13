@@ -32,6 +32,17 @@ $Commands = @(
        Do = { param($m) if (-not (Find-NotePage $m[2])) { return $false }; Show-NotePage $m[2] ([bool]$m[1]) } }
     @{ When = 'Early'; Area = 'EMAIL'; Use = 'check email (runs a scan now)'; Rx = '^(?i)(?:check|scan)(?:\s+(?:my|the))?\s*(?:e-?mails?|mail|inbox)$|^(?i)scan$'
        Do = { [void](Invoke-MailScan (Get-Date) 'manual') } }
+    @{ When = 'Early'; Area = 'EMAIL'; Use = 'reply to 2 by Friday (a to-do to reply to that email; the date is optional)'; Rx = '^(?i)reply\s+(?:to\s+)?(?:(?:email|mail|item|number|no\.?|#)\s*)?(\d+)(?:\s+(?:by\s+|on\s+|for\s+|due\s+)?(.+?))?[.!]*$'
+       Do = { param($m)
+              $a = @($state.LastAlert | Where-Object { $_ -and [int]$_.n -eq [int]$m[1] }) | Select-Object -First 1
+              if (-not $a) { Send-Chat "I don't have a numbered email $($m[1]). Ask me to check email, or name the sender."; return }
+              $text = "Reply to $($a.from)" + $(if ([string]$a.subject) { ": $($a.subject)" } else { "" })
+              $done = @(Add-TodoItems @(@{ text = $text; due_said = [string]$m[2]; mailLink = [string]$a.link }))
+              Send-Chat ("Added to your to-do list: " + ($done -join "; ") + "`n" + (Request-TodoDue)).Trim() } }
+    @{ When = 'Early'; Area = 'EMAIL'; Use = 'skip 2 / skip all (stop asking about unanswered email)'; Rx = '^(?i)(?:skip|drop|dismiss)\s+(all|\d+(?:\s*(?:,|and|&)\s*\d+)*)$'
+       Do = { param($m) Set-ReplySkip $m[1] } }
+    @{ When = 'Late'; Area = 'EMAIL'; Use = 'unanswered (email still waiting on your reply)'; Rx = '^(?i)(?:unanswered|unreplied|owed replies)$'
+       Do = { Send-ReplyCheck (Get-Date) -Asked } }
     @{ When = 'Late'; Area = 'EMAIL'; Use = 'fyi (the queued FYI email)'; Rx = '^(?i)fyi$'
        Do = { Send-FyiBatch -Asked } }
     @{ When = 'Late'; Area = 'CALENDAR'; Use = 'prep (brief for the meeting I just asked about)'; Rx = '^(?i)prep(?:\s+(?:brief|me))?$'
