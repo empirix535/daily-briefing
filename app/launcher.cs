@@ -1,9 +1,9 @@
 // Daily Briefing launcher (built into DailyBriefing.exe by Install.ps1 with the C# compiler included in Windows).
-//   1. Starts classic Outlook minimized if it is not running.
-//   2. Starts app\server.ps1 hidden (tray icon only) if the server is not already running.
-//   3. Opens the dashboard window (Chrome, else Edge), or brings it to the front if it is already open.
+//   1. Starts app\server.ps1 hidden (tray icon only) if the server is not already running.
+//   2. Opens the dashboard window (Chrome, else Edge), or brings it to the front if it is already open
+//      (including a window the tray app hid when it was minimized).
 //      Skipped with --background (used by "Start with Windows").
-//   4. Tags the window with the app's taskbar ID, so it shares one taskbar button with the pinned launcher,
+//   3. Tags the window with the app's taskbar ID, so it shares one taskbar button with the pinned launcher,
 //      and pinning the open window pins this launcher (with its icon) instead of Chrome.
 //   --register-shortcut "<path.lnk>" tags a shortcut with the same ID (used by Install.ps1).
 // Written for C# 5 so it compiles with the .NET Framework 4.x compiler.
@@ -42,8 +42,6 @@ static class Program
 
         try
         {
-            if (Process.GetProcessesByName("OUTLOOK").Length == 0) StartOutlookMinimized();
-
             if (!ServerUp(url))
             {
                 if (!File.Exists(server)) { Warn("Could not find app\\server.ps1 next to DailyBriefing.exe."); return 1; }
@@ -114,37 +112,6 @@ static class Program
                 return res.StatusCode == HttpStatusCode.OK;
         }
         catch { return false; }
-    }
-
-    static void StartOutlookMinimized()
-    {
-        try
-        {
-            ProcessStartInfo psi = new ProcessStartInfo("outlook.exe");
-            psi.UseShellExecute = true;
-            psi.WindowStyle = ProcessWindowStyle.Minimized;
-            Process.Start(psi);
-        }
-        catch { return; }
-
-        // Minimize the main window once it exists (reply windows are separate and open normally)
-        Type t = Type.GetTypeFromProgID("Outlook.Application");
-        if (t == null) return;
-        for (int i = 0; i < 30; i++)
-        {
-            try
-            {
-                object app = Activator.CreateInstance(t);
-                object explorer = t.InvokeMember("ActiveExplorer", BindingFlags.InvokeMethod, null, app, null);
-                if (explorer != null)
-                {
-                    explorer.GetType().InvokeMember("WindowState", BindingFlags.SetProperty, null, explorer, new object[] { 1 });
-                    return;
-                }
-            }
-            catch { }
-            Thread.Sleep(500);
-        }
     }
 
     static void OpenWindow(string url)
@@ -227,13 +194,12 @@ static class Taskbar
         finally { Marshal.FreeCoTaskMem(pv.p); }
     }
 
-    // The visible Chrome/Edge window whose title is exactly the dashboard's title
+    // The Chrome/Edge window whose title is exactly the dashboard's title (visible, minimized, or hidden to the tray)
     public static IntPtr FindWindow(string title)
     {
         IntPtr found = IntPtr.Zero;
         EnumWindows(delegate (IntPtr h, IntPtr l)
         {
-            if (!IsWindowVisible(h)) return true;
             StringBuilder sb = new StringBuilder(256);
             GetWindowText(h, sb, sb.Capacity);
             if (sb.ToString() != title) return true;
@@ -284,7 +250,7 @@ static class Taskbar
 
     public static void BringToFront(IntPtr hwnd)
     {
-        if (IsIconic(hwnd)) ShowWindow(hwnd, 9);   // SW_RESTORE
+        if (IsIconic(hwnd) || !IsWindowVisible(hwnd)) ShowWindow(hwnd, 9);   // SW_RESTORE
         SetForegroundWindow(hwnd);
     }
 }

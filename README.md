@@ -60,6 +60,7 @@ Personal values live in `settings.json` (see `settings.example.json`). Restart t
 | `SecretaryDays`, `SecretaryStart`, `SecretaryEnd` | Working hours for scans, nudges, and alerts |
 | `SecretaryMaxCallsPerDay` | Daily cap on assistant Claude calls (250) |
 | `StreamsPath` | Full path to `streams.json` |
+| `MinimizeToTray` | `true` hides the dashboard window when minimized; the tray icon restores it |
 | `Port` | Local port, 8000 by default |
 
 ## Everyday use

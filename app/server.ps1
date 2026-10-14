@@ -22,6 +22,7 @@ $Config = @{
     SecretaryStart          = "08:00"   # working hours: scans, nags, alerts
     SecretaryEnd            = "18:00"
     SecretaryMaxCallsPerDay = 250       # Claude calls per day (chat answers and scans)
+    MinimizeToTray      = $true     # minimizing the dashboard window hides it; the tray icon brings it back
     # Streams tab: work pipeline file (also edited by Claude Code); item paths are relative to its parent's parent (root)
     StreamsPath         = "$(if ($env:OneDriveCommercial) { $env:OneDriveCommercial } else { "$env:USERPROFILE\OneDrive" })\root\_admin\streams.json"   # override in settings.json
     Port                = 8000
@@ -355,7 +356,62 @@ function Get-BrowserPath {
     }
     return "chrome.exe"
 }
+# Minimize to tray: a minimized dashboard window is hidden (no taskbar button). The tray icon, the launcher, and Open Dashboard restore it.
+Add-Type -TypeDefinition @"
+using System; using System.Diagnostics; using System.Runtime.InteropServices; using System.Text;
+public static class DashWin {
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    public static IntPtr Find(string title) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr h, IntPtr l) {
+            StringBuilder sb = new StringBuilder(256); GetWindowText(h, sb, 256);
+            if (sb.ToString() != title) return true;
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            try {
+                string n = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant();
+                if (n == "chrome" || n == "msedge") { found = h; return false; }
+            } catch { }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+    public static bool Alive(IntPtr h) { return IsWindow(h); }
+    public static bool Visible(IntPtr h) { return IsWindowVisible(h); }
+    public static bool ShouldHide(IntPtr h) { return IsWindowVisible(h) && IsIconic(h); }
+    public static void Hide(IntPtr h) { ShowWindow(h, 0); }
+    public static void Restore(IntPtr h) { ShowWindow(h, 9); SetForegroundWindow(h); }
+}
+"@
+$script:DashHidden = [IntPtr]::Zero
+function Hide-DashboardIfMinimized {
+    if (-not $Config.MinimizeToTray) { return }
+    if (-not $script:DashHidden.Equals([IntPtr]::Zero)) {
+        # Still hidden: nothing to do. Gone, or brought back by the launcher: start watching again.
+        if ([DashWin]::Alive($script:DashHidden) -and -not [DashWin]::Visible($script:DashHidden)) { return }
+        $script:DashHidden = [IntPtr]::Zero
+    }
+    $h = [DashWin]::Find("Daily Briefing")
+    if (-not $h.Equals([IntPtr]::Zero) -and [DashWin]::ShouldHide($h)) { [DashWin]::Hide($h); $script:DashHidden = $h }
+}
+# $true when a hidden dashboard window was brought back
+function Restore-Dashboard {
+    $h = $script:DashHidden
+    if ($h.Equals([IntPtr]::Zero)) { return $false }
+    $script:DashHidden = [IntPtr]::Zero
+    if (-not [DashWin]::Alive($h)) { return $false }
+    [DashWin]::Restore($h)
+    return $true
+}
 function Open-Dashboard {
+    if (Restore-Dashboard) { return }
     $exe = Join-Path $BaseDir "DailyBriefing.exe"
     if (Test-Path $exe) { Start-Process $exe } else { Start-Process (Get-BrowserPath) "--app=$Url --window-size=960,1350" }
 }
@@ -368,7 +424,8 @@ $script:ShuttingDown = $false
 function Stop-Server([string]$Reason, [bool]$Restart = $false) {
     if ($script:ShuttingDown) { return }
     $script:ShuttingDown = $true
-    $timer.Stop()
+    $timer.Stop(); $winTimer.Stop()
+    [void](Restore-Dashboard)   # never leave the dashboard window hidden with no server behind it
     Write-Log "Shutting down: $Reason"
     $sync.Stopping = $true
     try { $listener.Stop(); $listener.Close() } catch {}
@@ -428,6 +485,12 @@ $miExit.add_Click({ Stop-Server "Exit requested from tray" })
 $notify.ContextMenuStrip = $menu
 $notify.add_DoubleClick({ Open-Dashboard })
 $notify.Visible = $true
+
+# Window watcher: hides a minimized dashboard window (half a second apart, so the taskbar button barely shows)
+$winTimer = New-Object System.Windows.Forms.Timer
+$winTimer.Interval = 500
+$winTimer.add_Tick({ try { Hide-DashboardIfMinimized } catch { } })
+$winTimer.Start()
 
 # Watchdog: crash checks and tray alerts. With the assistant on, closing the dashboard keeps the server running.
 $script:LastTick = Get-Date

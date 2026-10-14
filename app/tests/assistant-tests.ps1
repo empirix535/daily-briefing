@@ -113,11 +113,11 @@ $r = Say "yes"
 Check "yes applies the tidy and keeps a backup" ((Read-NotePage General) -match '# Home' -and @(Get-ChildItem (Join-Path $NotesDir "_removed")).Count -ge 1) $r
 
 # ------------------------------------------------------------------ reminders
-$added = @(Add-Reminders @(@{ text = "Take meds"; kind = "once"; at = "2026-10-14T10:00"; nag_minutes = 15 }))
+$added = @(Add-Reminders @(@{ text = "Take meds"; kind = "once"; at = "2027-10-20T10:00"; nag_minutes = 15 }))
 Check "a reminder saves" ($added.Count -eq 1) ""
-$script:Out.Clear(); Invoke-Reminders ([datetime]'2026-10-14 10:00')
+$script:Out.Clear(); Invoke-Reminders ([datetime]'2027-10-20 10:00')
 Check "it fires at its time" ((@($script:Out) -join ' ') -match 'Reminder: Take meds') (@($script:Out) -join ' ')
-$script:Out.Clear(); Invoke-Reminders ([datetime]'2026-10-14 10:20')
+$script:Out.Clear(); Invoke-Reminders ([datetime]'2027-10-20 10:20')
 Check "it nags until done" ((@($script:Out) -join ' ') -match 'Reminder \(again\): Take meds') (@($script:Out) -join ' ')
 $r = Say "done"
 Check "done marks it" ($r -match 'marked done' -and [bool]$added[0].done) $r

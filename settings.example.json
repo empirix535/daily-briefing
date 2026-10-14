@@ -27,5 +27,7 @@
     "SecretaryEnd": "18:00",
     "SecretaryMaxCallsPerDay": 250,
     "_help_streams": "Optional. Full path to your streams.json (Streams tab). Defaults to <OneDrive>\\root\\_admin\\streams.json.",
+    "_help_tray": "MinimizeToTray hides the dashboard window when you minimize it. Click the tray icon to bring it back.",
+    "MinimizeToTray": true,
     "Port": 8000
 }
