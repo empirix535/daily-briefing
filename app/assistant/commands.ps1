@@ -7,7 +7,9 @@ $Commands = @(
     @{ When = 'Early'; Area = 'NOTES'; Use = 'start notes / end notes [page] / cancel notes'; Rx = '^(?i)(start|take|begin) notes?$'
        Do = { Start-Notes } }
     @{ When = 'Early'; Area = 'TO-DOS'; Use = 'todo: X'; Raw = $true; Rx = '^(?i)(?:todo|to-do|task):\s*(.+)$'
-       Do = { param($m) $a = @(Add-TodoItems @(@{ text = $m[1].Trim() })); Send-Chat ("Added to your to-do list: " + ($a -join "; ") + "`n" + (Request-TodoDue)).Trim() } }
+       Do = { param($m) $sp = Split-TodoSubitems $m[1]
+              $items = @(@{ text = $sp.main }) + @($sp.subs | ForEach-Object { @{ text = $_; parent = $sp.main } })
+              $a = @(Add-TodoItems $items); $script:LastTodoAdds = @($script:LastTodoAdds | Select-Object -First 1); Send-Chat ("Added to your to-do list: " + ($a -join "; ") + "`n" + (Request-TodoDue)).Trim() } }
     @{ When = 'Early'; Area = 'TO-DOS'; Use = 'todos'; Rx = '^(?i)(?:show\s+)?(?:my\s+)?(todos|to-dos|tasks|to-do list|todo list)$'
        Do = { $o = Get-OpenTodoText; Send-Chat $(if ($o) { "Open to-dos:`n$o" } else { "Your to-do list has no open items." }) } }
     @{ When = 'Early'; Area = 'NOTES'; Use = 'new note page X'; Rx = '^(?i)(?:new|create|add|make)\s+(?:a\s+|an\s+)?(?:new\s+)?notes?\s*(?:tab|page)s?(?:\s+(?:called|named|for))?:?\s*(.+)$'
@@ -17,7 +19,7 @@ $Commands = @(
               $have = Find-NotePage $name
               if ($have -and $have -ieq $name) { Send-Chat "There's already a note page called ""$have""."; return }
               $made = New-NotePage $name
-              Send-Chat "Created the note page ""$made"". I'll file notes there when you name it (note $made`: ...) or when I guess it." } }
+              Send-Chat "Created the note page ""$made""." } }
     @{ When = 'Early'; Area = 'NOTES'; Use = 'note pages'; Rx = '^(?i)(notes? ?(tabs|pages)|list notes)$'
        Do = { Send-Chat ("Note pages: " + ((Get-NotePages) -join ", ")) } }
     @{ When = 'Early'; Area = 'NOTES'; Use = 'note to PAGE: X'; Raw = $true; Rx = '^(?i)note\s+(?:to|in|for|on)\s+([^:]{1,40}):\s*(.+)$'
@@ -32,14 +34,29 @@ $Commands = @(
        Do = { param($m) if (-not (Find-NotePage $m[2])) { return $false }; Show-NotePage $m[2] ([bool]$m[1]) } }
     @{ When = 'Early'; Area = 'EMAIL'; Use = 'check email (runs a scan now)'; Rx = '^(?i)(?:check|scan)(?:\s+(?:my|the))?\s*(?:e-?mails?|mail|inbox)$|^(?i)scan$'
        Do = { [void](Invoke-MailScan (Get-Date) 'manual') } }
+    @{ When = 'Early'; Area = 'EMAIL'; Use = 'connector test (tries each Microsoft 365 tool once and says which are blocked)'; Rx = '^(?i)(?:connector|tools?)\s+(?:test|check)$'
+       Do = { $p = @"
+Try each of these read-only Microsoft 365 tools exactly once with the smallest possible request, and report what happened. Do not retry a tool that fails.
+1. get_me (no arguments)
+2. outlook_email_search (inbox, only the single newest message)
+3. outlook_calendar_search (only today's events)
+4. read_resource: skip it and report "not tested"
+5. find_meeting_availability: skip it and report "not tested"
+Answer with one JSON object and nothing else: {"results": [{"tool": "tool name", "status": "ok|blocked|error|not tested", "detail": "the exact error text if it failed, else empty"}]}
+"@
+              Send-Chat "Testing the connector tools, about a minute."
+              try { $r = ConvertFrom-ModelJson (Invoke-SecConnector $p) }
+              catch { Send-Chat "The test could not run: $(Get-PlainError $_.Exception.Message)"; return }
+              $lines = @($r.results | ForEach-Object { "$($_.tool): $($_.status)" + $(if ([string]$_.detail) { " ($($_.detail))" } else { "" }) })
+              Send-Chat ("Connector tools:`n" + ($lines -join "`n")) } }
     @{ When = 'Early'; Area = 'EMAIL'; Use = 'reply to 2 by Friday (a to-do to reply to that email; the date is optional)'; Rx = '^(?i)reply\s+(?:to\s+)?(?:(?:email|mail|item|number|no\.?|#)\s*)?(\d+)(?:\s+(?:by\s+|on\s+|for\s+|due\s+)?(.+?))?[.!]*$'
        Do = { param($m)
               $a = @($state.LastAlert | Where-Object { $_ -and [int]$_.n -eq [int]$m[1] }) | Select-Object -First 1
-              if (-not $a) { Send-Chat "I don't have a numbered email $($m[1]). Ask me to check email, or name the sender."; return }
+              if (-not $a) { Send-Chat "I don't have a numbered email $($m[1])."; return }
               $text = "Reply to $($a.from)" + $(if ([string]$a.subject) { ": $($a.subject)" } else { "" })
               $done = @(Add-TodoItems @(@{ text = $text; due_said = [string]$m[2]; mailLink = [string]$a.link }))
               Send-Chat ("Added to your to-do list: " + ($done -join "; ") + "`n" + (Request-TodoDue)).Trim() } }
-    @{ When = 'Early'; Area = 'EMAIL'; Use = 'skip 2 / skip all (stop asking about unanswered email)'; Rx = '^(?i)(?:skip|drop|dismiss)\s+(all|\d+(?:\s*(?:,|and|&)\s*\d+)*)$'
+    @{ When = 'Early'; Area = 'EMAIL'; Use = 'skip 2 / skip all (stop asking about unanswered email)'; Rx = '^(?i)(?:(?:skip|drop|dismiss)|.*\b(?:emails?|repl\w*|respond\w*|unanswered|list)\b.*?\b(?:skip|drop|dismiss|clear|remove|forget|ignore))(?:\s+out)?\s+(?:items?\s+|numbers?\s+)?(all|\d+(?:(?:\s*,\s*|\s+and\s+|\s*&\s*|\s+)\d+)*)\s*[.!]?$'
        Do = { param($m) Set-ReplySkip $m[1] } }
     @{ When = 'Late'; Area = 'EMAIL'; Use = 'unanswered (email still waiting on your reply)'; Rx = '^(?i)(?:unanswered|unreplied|owed replies)$'
        Do = { Send-ReplyCheck (Get-Date) -Asked } }
@@ -64,7 +81,7 @@ $Commands = @(
               Send-Chat $(if ($r) { "Deleted reminder #$id ($($r.text))." } else { "I don't have a reminder #$id." }) } }
     @{ When = 'Late'; Area = 'OTHER'; Use = 'pause / resume'; Rx = '^(?i)(pause|resume)$'
        Do = { param($m) $state.Paused = ($m[1] -ieq 'pause'); Save-State
-              Send-Chat $(if ($state.Paused) { "Paused. No reminders until you type resume." } else { "Back on." }) } }
+              Send-Chat $(if ($state.Paused) { "Paused." } else { "Back on." }) } }
     @{ When = 'Late'; Area = 'OTHER'; Use = 'help'; Rx = '^(?i)(help|commands|cheat ?sheet)$'
        Do = { Send-Chat (Get-CheatSheet) } }
 )
@@ -143,7 +160,7 @@ function Invoke-ChatCommand([string]$Text) {
         Add-NoteLine $Text; return $true
     }
     if ($null -ne (Get-NotesPhrase $Text 'start')) { Start-Notes; return $true }
-    if ($null -ne (Get-NotesPhrase $Text 'end')) { Send-Chat "No notes session is open, so there was nothing to end. Type start notes to begin one."; return $true }
+    if ($null -ne (Get-NotesPhrase $Text 'end')) { Send-Chat "No notes session is open, so there was nothing to end."; return $true }
     if (Invoke-CommandTable $Text 'Early') { return $true }
     if (Resolve-AskAnswer $Text) { return $true }
     if (Invoke-CommandTable $Text 'Late') { return $true }
@@ -154,7 +171,7 @@ function Invoke-ChatCommand([string]$Text) {
 # ------------------------------------------------------------------ the router: everything that is not a command
 function Get-AssistantReply([string[]]$NewMessages, [string]$Recent) {
     if (-not (Test-CallBudget)) {
-        return @{ route = "chat"; reply = "I've hit today's limit of $($Config.SecretaryMaxCallsPerDay) Claude calls, so I can only handle commands (type help) until tomorrow." }
+        return @{ route = "chat"; reply = "I've hit today's limit of $($Config.SecretaryMaxCallsPerDay) Claude calls, so I can only handle commands until tomorrow." }
     }
     $rules = [System.IO.File]::ReadAllText($RulesPath, $Utf8)
     $voice = [System.IO.File]::ReadAllText($VoicePath, $Utf8)
@@ -162,7 +179,7 @@ function Get-AssistantReply([string[]]$NewMessages, [string]$Recent) {
     if (-not $rem) { $rem = "(none)" }
     $now = Get-Date
     $prompt = @"
-You are $U's admin assistant inside $U's Daily Briefing app. You talk only with $U, in $U's Teams notes-to-self chat.
+You are Otis, $U's admin assistant. You talk only with $U, in $U's Teams notes-to-self chat.
 You cannot send email, draft email, change the calendar, or message anyone else. You reply with text and manage $U's reminders and to-dos.
 
 Now: $($now.ToString("dddd, MMMM d, yyyy h:mm tt", $Inv)) ($U's local time)
@@ -205,7 +222,9 @@ route: "mail" if $U asks about an email or thread (what someone said, wants, sen
 Otherwise "chat". "Remind me ..." is always a reminder ("chat"), not a calendar entry.
 Never say you did something (started notes, saved, added, scheduled) unless it is in the arrays above; the app does the actions and confirms them.
 To-dos: use add_todos only when $U explicitly asks for a to-do, a task, or something on the list. Never turn a remark, an update, or an observation into a to-do; reply to it instead. Write the task itself, never $U's instruction to you. Fill due_said and due only when $U gives a time for the task (today, tomorrow, by Friday, next week = Friday of next week, end of month = its last weekday); look the date up in the date list and leave the time out of the task text. A to-do with a due date is not a reminder: do not add reminders for to-dos unless $U asks to be reminded. When $U only adds or changes to-dos, leave reply empty (the app confirms). When $U changes when an existing to-do is due, use set_due. When $U says a to-do is done, finished, or to check it off, use complete_todos with the exact existing text. When $U asks to delete or remove a to-do, use delete_todos with the exact existing text.
+To make a to-do with sub-items in one request ("start the X paper and add sub-items: figures, tables"), list the main to-do first in add_todos, then each sub-item with parent set to the main to-do's exact text. Keep the main to-do short and do not put the instruction itself in any text.
 Use nag_minutes > 0 only when $U asks to be reminded repeatedly until $U confirms (default 15 if no interval is given).
+For a reminder worded "before noon", "before COB" or "end of day", or "this afternoon", add a once reminder on the right day with any time; the app picks the exact time itself. Do not ask what time that means.
 Resolve "it", "that", or "this" from the recent conversation and write a self-contained reminder text.
 Never say you added or removed a reminder unless it is in add_reminders or remove_reminders; the app confirms what was saved, so keep the reply short. If something is unclear, ask instead of adding. Leave the arrays empty when nothing changes.
 "@
@@ -218,14 +237,14 @@ function Invoke-UserMessages([string[]]$Texts) {
     $rest = @()
     foreach ($x in $Texts) {
         try { if (-not (Invoke-ChatCommand $x)) { $rest += $x } }
-        catch { Write-Log "Command failed: $($_.Exception.Message)" "WARN"; Send-Chat "Something went wrong: $($_.Exception.Message)" }
+        catch { Write-Log "Command failed: $($_.Exception.Message)" "WARN"; Send-Chat "Something went wrong: $(Get-PlainError $_.Exception.Message)" }
     }
     if (-not $rest) { return }
-    if ($state.Paused) { Send-Chat "I'm paused. Type resume to turn me back on."; return }
+    if ($state.Paused) { Send-Chat "I'm paused."; return }
     try { $ans = Get-AssistantReply $rest $recent }
     catch {
         Write-Log "Reply failed: $($_.Exception.Message)" "WARN"
-        Send-Chat "I couldn't reach Claude just now. Try again in a few minutes."
+        Send-Chat "I couldn't reach Claude just now."
         return
     }
     $route = [string]$ans.route
@@ -238,13 +257,14 @@ function Invoke-UserMessages([string[]]$Texts) {
             'today'    { Send-DayBrief (Get-Date).Date 'week'; return }
             'tomorrow' { Send-DayBrief (Get-NextWorkday (Get-Date)) 'today'; return }
         }
-    } catch { Write-Log "Route $route failed: $($_.Exception.Message)" "WARN"; Send-Chat "Something went wrong: $($_.Exception.Message)"; return }
+    } catch { Write-Log "Route $route failed: $($_.Exception.Message)" "WARN"; Send-Chat "Something went wrong: $(Get-PlainError $_.Exception.Message)"; return }
 
     $todoReq = @($ans.add_todos | Where-Object { $_ }).Count -or @($ans.set_due | Where-Object { $_ }).Count -or @($ans.delete_todos | Where-Object { $_ }).Count
     if ($todoReq -and @($ans.add_reminders | Where-Object { $_ }).Count -and $msgText -notmatch '(?i)remind') {
         Write-Log "Dropped $(@($ans.add_reminders).Count) reminder(s) the model added alongside to-dos without being asked."
         $ans.add_reminders = @()
     }
+    Set-FuzzyTimes $ans.add_reminders $msgText
     $added = Add-Reminders $ans.add_reminders
     $removed = @()
     foreach ($id in @($ans.remove_reminders | Where-Object { $_ })) { if (Remove-ReminderById ([int]$id)) { $removed += [int]$id } }
@@ -256,6 +276,7 @@ function Invoke-UserMessages([string[]]$Texts) {
             $todoAdded = @(Add-TodoItems $ans.add_todos)
         }
         if ($ans.complete_todos) { $todoDone = @(Complete-TodoItems $ans.complete_todos) }
+        $script:LastDueMisses = @()
         if ($ans.set_due) { $todoDue = @(Set-TodoDueByText $ans.set_due) }
         if ($ans.delete_todos) { $todoGone = @(Remove-TodoItems $ans.delete_todos); $todoSkip = @($script:LastTodoSkips) }
     } catch { $todoErr = "I couldn't read your to-do list, so I left it untouched: $($_.Exception.Message)"; Write-Log $todoErr "WARN" }
@@ -273,6 +294,7 @@ function Invoke-UserMessages([string[]]$Texts) {
     if ($todoGone) { $conf += "Deleted from your to-do list:`n" + (($todoGone | ForEach-Object { "- $_" }) -join "`n") }
     if ($todoSkip) { $conf += "Not deleted (finish or delete the sub-items first):`n" + (($todoSkip | ForEach-Object { "- $_" }) -join "`n") }
     if ($ans.delete_todos -and -not $todoGone -and -not $todoSkip -and -not $todoErr) { $conf += "I couldn't find that to-do. Give me its exact words." }
+    if (@($script:LastDueMisses).Count) { $conf += "Couldn't match: " + ((@($script:LastDueMisses)) -join "; ") + ". Which to-do did you mean?" }
     if ($todoErr) { $conf += $todoErr }
     if (-not $conf -and $reply -match '(?i)^\s*(deleted|removed|added|saved|done|marked|checked off|set)\b[^?]{0,40}$') {
         Write-Log "Dropped a reply that claimed an action nothing performed: $reply" "WARN"

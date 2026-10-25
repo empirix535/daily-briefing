@@ -1,4 +1,4 @@
-# Daily Briefing installer. Double-click Install.cmd to run it.
+# Otis installer. Double-click Install.cmd to run it.
 # Safe to run again at any time (for example after updating the files).
 $ErrorActionPreference = "Stop"
 $Base   = $PSScriptRoot
@@ -11,16 +11,16 @@ function Step($m) { Write-Host ""; Write-Host "> $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "  $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "  $m" -ForegroundColor Yellow }
 
-Write-Host "Daily Briefing setup" -ForegroundColor White
+Write-Host "Otis setup" -ForegroundColor White
 Write-Host "Folder: $Base"
 
-if (-not (Test-Path (Join-Path $App "server.ps1"))) { throw "app\server.ps1 is missing. Run Install.cmd from the Daily Briefing folder." }
+if (-not (Test-Path (Join-Path $App "server.ps1"))) { throw "app\server.ps1 is missing. Run Install.cmd from the Otis folder." }
 
 # Files downloaded from GitHub are marked as coming from the internet; unblock them
 Get-ChildItem $Base -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
 
 # 1. Stop a running server so files can be moved and rebuilt
-Step "Stopping any running Daily Briefing server"
+Step "Stopping any running Otis server"
 $procs = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -match 'server\.ps1' -and $_.CommandLine -like "*$Base*" })
 foreach ($p in $procs) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue; Ok "Stopped server (process $($p.ProcessId))" }
 if (-not $procs.Count) { Ok "None running" }
@@ -46,7 +46,10 @@ foreach ($f in "server.ps1", "Index.html", "launch_dashboard.vbs", "agenda.ico",
 
 # 3. Restore personal data from the OneDrive backup (new PC or reinstall)
 $od = @($env:OneDriveCommercial, $env:OneDrive) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-$backup = if ($od) { Join-Path $od "Daily Briefing backup\latest" } else { $null }
+$backup = $null
+if ($od) {
+    foreach ($nm in "Otis backup", "Daily Briefing backup") { $c = Join-Path $od "$nm\latest"; if (-not $backup -and (Test-Path $c)) { $backup = $c } }
+}
 if ($backup -and (Test-Path $backup) -and -not (Test-Path (Join-Path $Data "todo.json"))) {
     Step "Backup found in OneDrive"
     Write-Host "  $backup"
@@ -97,7 +100,7 @@ if ((Test-Path (Join-Path $bin "claude.exe")) -and ($userPath -notlike "*$bin*")
 if ((Get-Command claude -ErrorAction SilentlyContinue) -or (Test-Path (Join-Path $bin "claude.exe"))) { Ok "Claude Code found" }
 else { Warn "Claude Code not found. Install it in PowerShell with:  irm https://claude.ai/install.ps1 | iex   then run 'claude' once to sign in." }
 if ($env:ANTHROPIC_API_KEY -or [Environment]::GetEnvironmentVariable("ANTHROPIC_API_KEY", "User")) {
-    Warn "ANTHROPIC_API_KEY is set. The dashboard ignores it and uses your Claude subscription login."
+    Warn "ANTHROPIC_API_KEY is set. Otis ignores it and uses your Claude subscription login."
 }
 
 # 6. Build DailyBriefing.exe with the C# compiler included in Windows
@@ -120,39 +123,43 @@ function New-Shortcut([string]$Path, [string]$Arguments = "") {
     else { $l.TargetPath = "wscript.exe"; $l.Arguments = "`"$(Join-Path $App 'launch.vbs')`" $($Arguments -replace '--', '/')" }
     $l.WorkingDirectory = $Base
     $l.IconLocation = "$Icon,0"
-    $l.Description = "Daily Briefing"
+    $l.Description = "Otis"
     $l.Save()
 }
-$lnkStart   = Join-Path ([Environment]::GetFolderPath("Programs")) "Daily Briefing.lnk"
-$lnkDesktop = Join-Path ([Environment]::GetFolderPath("Desktop")) "Daily Briefing.lnk"
-New-Shortcut $lnkStart;   Ok "Start menu: Daily Briefing"
-New-Shortcut $lnkDesktop; Ok "Desktop: Daily Briefing"
+$lnkStart   = Join-Path ([Environment]::GetFolderPath("Programs")) "Otis.lnk"
+$lnkDesktop = Join-Path ([Environment]::GetFolderPath("Desktop")) "Otis.lnk"
+# The app used to be called Daily Briefing: drop the old shortcuts (Start menu and Desktop here, Startup below)
+foreach ($d in "Programs", "Desktop") { $o = Join-Path ([Environment]::GetFolderPath($d)) "Daily Briefing.lnk"; if (Test-Path $o) { Remove-Item $o -Force } }
+New-Shortcut $lnkStart;   Ok "Start menu: Otis"
+New-Shortcut $lnkDesktop; Ok "Desktop: Otis"
 if ($useExe) {
-    # Same taskbar ID as the dashboard window, so the pinned icon and the open window share one button
+    # Same taskbar ID as the Otis window, so the pinned icon and the open window share one button
     foreach ($l in $lnkStart, $lnkDesktop) { Start-Process $Exe -ArgumentList "--register-shortcut", "`"$l`"" -Wait }
     Ok "Taskbar grouping set up (re-pin from Start if you pinned before)"
 }
 try { & "$env:WINDIR\System32\ie4uinit.exe" -show; Ok "Refreshed Windows' icon cache" } catch {}
 
-$startup = Join-Path ([Environment]::GetFolderPath("Startup")) "Daily Briefing.lnk"
+$startup = Join-Path ([Environment]::GetFolderPath("Startup")) "Otis.lnk"
+$oldStartup = Join-Path ([Environment]::GetFolderPath("Startup")) "Daily Briefing.lnk"
+if ((Test-Path $oldStartup) -and -not (Test-Path $startup)) { Move-Item -LiteralPath $oldStartup -Destination $startup }
 if (Test-Path $startup) { Ok "Start with Windows is on (turn it off from the tray menu)" }
 else {
     # The assistant only works while the server runs, so offer to start it at sign-in
-    $sw = Read-Host "  Start Daily Briefing (and the Teams assistant) when you sign in to Windows? (Y/n)"
+    $sw = Read-Host "  Start Otis when you sign in to Windows? (Y/n)"
     if ($sw -notmatch '^[nN]') {
         $l = $wsh.CreateShortcut($startup)
         if ($useExe) { $l.TargetPath = $Exe; $l.Arguments = "--background" }
         else { $l.TargetPath = "wscript.exe"; $l.Arguments = "`"$(Join-Path $App 'launch.vbs')`" /background" }
-        $l.WorkingDirectory = $Base; $l.IconLocation = "$Icon,0"; $l.Description = "Daily Briefing (starts in the background)"; $l.Save()
+        $l.WorkingDirectory = $Base; $l.IconLocation = "$Icon,0"; $l.Description = "Otis (starts in the background)"; $l.Save()
         Ok "Start with Windows is on"
     }
 }
 
 # 8. Done
 Step "Done"
-Write-Host "  To pin it: open Start, right-click Daily Briefing, choose Pin to taskbar."
+Write-Host "  To pin it: open Start, right-click Otis, choose Pin to taskbar."
 Write-Host "  The Teams assistant opens its own hidden Chrome window. The first time, it shows the window so you can sign in to Teams."
-$go = Read-Host "  Open Daily Briefing now? (Y/n)"
+$go = Read-Host "  Open Otis now? (Y/n)"
 if ($go -notmatch '^[nN]') {
     if ($useExe) { Start-Process $Exe } else { Start-Process wscript.exe "`"$(Join-Path $App 'launch.vbs')`"" }
 }

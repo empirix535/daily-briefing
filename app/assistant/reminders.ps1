@@ -29,7 +29,8 @@ function Format-Reminder($r) {
 }
 
 function Send-Reminder($r, [string]$Note) {
-    Send-Chat ("Reminder{0}: {1}  (reply yes or done, or snooze 30m)" -f $(if ($Note) { " $Note" } else { "" }), [string]$r.text)
+    Send-Toast ("Reminder: " + [string]$r.text)
+    Send-Chat ("Reminder{0}: {1}" -f $(if ($Note) { " $Note" } else { "" }), [string]$r.text)
     $r.lastFired = (Get-Date).ToString("s")
     $state.LastReminderId = [int]$r.id
     Save-State
@@ -70,6 +71,29 @@ function Get-LastReminder {
     $r = @($Reminders | Where-Object { [int]$_.id -eq [int]$state.LastReminderId }) | Select-Object -First 1
     if ($r -and $r.lastFired -and ((Get-Date) - [datetime]$r.lastFired).TotalHours -lt 12) { return $r }
     return $null
+}
+
+# Vague times in a reminder request get a random time inside a window, so reminders do not all land on the same minute.
+# "before noon" 11:00-11:30, "before COB / end of day" 15:30-16:30, "this afternoon" 14:30-15:30. Only the time of day changes; the date stays as the model read it.
+$FuzzyWindows = @(
+    @{ Rx = '(?i)\b(?:before|by)\s+noon\b';                                             From = '11:00'; To = '11:30' },
+    @{ Rx = '(?i)\b(?:before|by)\s+(?:cob|c\.o\.b|close of business|eod|end of (?:the )?day)\b'; From = '15:30'; To = '16:30' },
+    @{ Rx = '(?i)\bthis afternoon\b';                                                    From = '14:30'; To = '15:30' }
+)
+function Set-FuzzyTimes($Items, [string]$Text, [datetime]$Now = (Get-Date)) {
+    $w = $FuzzyWindows | Where-Object { $Text -match $_.Rx } | Select-Object -First 1
+    if (-not $w) { return }
+    foreach ($it in @($Items | Where-Object { $_ -and [string]$_.kind -eq 'once' })) {
+        $day = $Now.Date
+        try { $day = [datetime]::ParseExact(([string]$it.at).Substring(0, 10), 'yyyy-MM-dd', $Inv) } catch { }
+        $lo = $day + [datetime]::ParseExact($w.From, 'HH:mm', $Inv).TimeOfDay
+        $hi = $day + [datetime]::ParseExact($w.To, 'HH:mm', $Inv).TimeOfDay
+        if ($day -eq $Now.Date -and $lo -lt $Now.AddMinutes(2)) { $lo = $Now.AddMinutes(2) }   # the window may be partly over today
+        if ($hi -le $lo) { continue }                                                         # window already over: keep the time the model chose
+        $mins = [int][math]::Floor(($hi - $lo).TotalMinutes)
+        $at = $lo.AddMinutes((Get-Random -Minimum 0 -Maximum ($mins + 1)))
+        $it.at = $at.ToString('yyyy-MM-ddTHH:mm', $Inv)
+    }
 }
 
 function Add-Reminders($Items) {

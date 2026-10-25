@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Briefing</title>
-    <link rel="icon" type="image/png" sizes="256x256" href="/icons/agenda-256.png?v=4">
-    <link rel="icon" href="/icons/agenda.ico?v=4">
+    <title>Otis</title>
+    <link rel="icon" type="image/png" sizes="256x256" href="/icons/agenda-256.png?v=5">
+    <link rel="icon" href="/icons/agenda.ico?v=5">
     <meta name="theme-color" content="#1f1e1d" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#f7f3ee" media="(prefers-color-scheme: light)">
-    <meta name="application-name" content="Daily Briefing">
+    <meta name="application-name" content="Otis">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
@@ -122,6 +122,13 @@
         .todo-row:hover .todo-acts, .todo-row:hover .todo-grip { opacity: 1; pointer-events: auto; }
         .todo-grip { opacity: 0; pointer-events: none; cursor: grab; color: var(--text-faint); font-size: 0.85rem; user-select: none; letter-spacing: -0.15em; width: 1rem; flex-shrink: 0; transition: opacity var(--ease); }
         .todo-item.dragging { opacity: 0.4; }
+        .todo-sec { margin-top: 1.1rem; border-radius: var(--r-sm); transition: background var(--ease); }
+        .todo-sec:first-child { margin-top: 0.4rem; }
+        .todo-sec-h { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); }
+        .todo-sec-h .n { font-weight: 500; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+        .todo-sec-h .rng { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+        .todo-sec-empty { padding: 0.45rem 0.5rem 0.45rem 2.1rem; font-size: 0.85rem; color: var(--text-faint); }
+        .todo-sec.drop-target { background: var(--accent-soft); outline: 1px dashed var(--accent); }
         .todo-row.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
         .todo-row.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
 
@@ -222,7 +229,22 @@
         summary.st-group { cursor: pointer; }
         .st-card { background: var(--inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.9rem 1rem; margin-bottom: 0.65rem; display: flex; flex-direction: column; gap: 0.5rem; }
         .st-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; }
-        .st-title { font-weight: 600; overflow-wrap: anywhere; }
+        .st-title { font-weight: 600; overflow-wrap: anywhere; flex: 1; }
+        /* Activity LED: focus (set by you), active, cooling, dormant. A blue ring means the next move is with someone else. */
+        .st-ledwrap { position: relative; flex: none; display: inline-block; }
+        .st-ledmenu { position: absolute; left: -0.3rem; top: 1.5rem; z-index: 20; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0.25rem; display: flex; flex-direction: column; min-width: 7.5rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+        .st-ledopt { display: flex; align-items: center; gap: 0.5rem; background: transparent; border: 0; color: var(--text-main); font: inherit; font-size: 0.84rem; text-align: left; padding: 0.3rem 0.5rem; border-radius: 6px; cursor: pointer; }
+        .st-ledopt:hover { background: var(--accent-soft); }
+        .st-ledopt.on { font-weight: 600; }
+        .st-ledopt .st-led { margin: 0; cursor: pointer; width: 0.6rem; height: 0.6rem; }
+        .st-led { display: block; width: 0.7rem; height: 0.7rem; border-radius: 50%; flex: none; margin-top: 0.4rem; cursor: pointer; background: #9a948a; transition: box-shadow var(--ease); }
+        .st-led.focus { background: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.28), 0 0 9px 2px rgba(34,197,94,0.7); }
+        .st-led.active { background: #3fae5f; }
+        .st-led.cooling { background: #e0a030; }
+        .st-led.dormant { background: #9a948a; }
+        .st-led.wait { outline: 2px solid #4a90d9; outline-offset: 2px; }
+        .st-legend { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: center; font-size: 0.76rem; color: var(--text-faint); margin: -0.4rem 0 0.8rem; }
+        .st-legend .st-led { width: 0.55rem; height: 0.55rem; margin: 0 0.3rem 0 0; cursor: default; display: inline-block; vertical-align: baseline; }
         .st-sub { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
         .st-mono { font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.8rem; color: var(--text-sub); overflow-wrap: anywhere; }
         .st-tag { font-size: 0.74rem; color: var(--info); background: var(--info-soft); border-radius: 999px; padding: 0.08rem 0.55rem; }
@@ -276,7 +298,7 @@
 
     <header>
         <div>
-            <h1>Daily Briefing</h1>
+            <h1>Otis</h1>
             <div class="sub-header" id="headerDate">Loading date...</div>
         </div>
         <div class="header-right">
@@ -325,7 +347,7 @@
                         <button class="btn-action" id="jotAskOk">OK</button>
                         <button class="btn-refresh" id="jotAskCancel">Cancel</button>
                     </div>
-                    <textarea id="jotText" class="jot-text" spellcheck="true" placeholder="Type anything. Saves as you go. Notes from the assistant (note: ... and end notes) land here too, newest on top."></textarea>
+                    <textarea id="jotText" class="jot-text" spellcheck="true" placeholder="Type anything. Saves as you go. Notes from Otis (note: ... and end notes) land here too, newest on top."></textarea>
                 </div>
                 <aside class="jot-ai" id="jotAi">
                     <div class="ai-head"><span>Claude</span><span class="ai-sel" id="aiSel"></span></div>
@@ -347,6 +369,7 @@
             </div>
             <div class="st-tiles" id="stTiles"></div>
             <div class="st-chips" id="stChips"></div>
+            <div class="st-legend"><span><span class="st-led focus"></span>Focus</span><span><span class="st-led active"></span>Active (7 days)</span><span><span class="st-led cooling"></span>Cooling (30 days)</span><span><span class="st-led dormant"></span>Dormant</span><span><span class="st-led dormant wait"></span>Waiting on someone else</span><span>Click an LED to set it yourself</span></div>
             <div id="stActive"></div>
             <div class="st-section" id="stIdeasSec" style="display:none;">
                 <div class="st-group">Ideas <button class="jot-link" id="stIdeaNew">+ Note an idea</button></div>
@@ -365,8 +388,8 @@
 
     <div class="server-overlay" id="serverOverlay">
         <div class="server-overlay-box">
-            <h2>Server stopped</h2>
-            <p>The Daily Briefing server is not responding. Start it again with launch_dashboard.vbs, or use Restart Server from the tray icon.</p>
+            <h2>Otis stopped</h2>
+            <p>Otis is not responding. Start it again from the Otis shortcut in the Start menu, or choose Restart Otis from the tray icon.</p>
             <div class="btns">
                 <button class="btn-refresh" onclick="heartbeat()">Retry</button>
                 <button class="btn-action" onclick="window.close()">Close window</button>
@@ -495,6 +518,32 @@
             renderTodos();
         }
 
+        // Sections come from the due date: Today (includes overdue), This week, No due date, and Later (only shown when something is due beyond this week).
+        // The stored list stays flat; order inside a section is the order in the list. Dragging between sections sets the due date to match.
+        const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        function todoBounds() {
+            const t = new Date(); t.setHours(0, 0, 0, 0);
+            const dow = t.getDay() || 7;                                   // Mon=1 .. Sun=7
+            const end = new Date(t); end.setDate(t.getDate() + (dow >= 6 ? 14 - dow : 7 - dow));   // Sunday; on Sat/Sun the week rolls to next Sunday
+            const tom = new Date(t); tom.setDate(t.getDate() + 1);
+            const fri = new Date(t); fri.setDate(t.getDate() + (5 - dow));
+            return { today: ymd(t), end: ymd(end), tomorrow: ymd(tom), friday: dow <= 4 ? ymd(fri) : ymd(tom), endDate: end };
+        }
+        function todoSection(item) {
+            if (!item.due) return 'none';
+            const b = todoBounds();
+            if (item.due <= b.today) return 'today';
+            if (item.due <= b.end) return 'week';
+            return 'later';
+        }
+        function todoSetSection(item, sec) {
+            if (todoSection(item) === sec) return;
+            const b = todoBounds();
+            if (sec === 'today') item.due = b.today;
+            else if (sec === 'week') item.due = b.friday;
+            else if (sec === 'none') delete item.due;
+        }
+        const TODO_SECS = [['today', 'Today'], ['week', 'This week'], ['none', 'No due date'], ['later', 'Later']];
         function renderTodos(focusId) {
             const list = document.getElementById('todoList');
             list.className = '';
@@ -503,7 +552,46 @@
                 list.innerHTML = '<div class="muted">No tasks yet.</div>';
                 return;
             }
-            todos.forEach(t => list.appendChild(todoNode(t, todos, 0)));
+            const b = todoBounds();
+            const rng = { today: 'incl. overdue', week: 'through ' + b.endDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }), none: '', later: 'after this week' };
+            TODO_SECS.forEach(([key, label]) => {
+                const items = todos.filter(t => todoSection(t) === key);
+                if (key === 'later' && !items.length) return;
+                const sec = document.createElement('div');
+                sec.className = 'todo-sec';
+                sec.dataset.sec = key;
+                const h = document.createElement('div');
+                h.className = 'todo-sec-h';
+                h.innerHTML = '<span>' + label + '</span><span class="n">' + items.length + '</span><span class="rng">' + rng[key] + '</span>';
+                sec.appendChild(h);
+                if (!items.length) {
+                    const e = document.createElement('div');
+                    e.className = 'todo-sec-empty';
+                    e.textContent = key === 'today' ? 'Nothing due today. Drag a task here to do it today.' : key === 'week' ? 'Nothing else this week.' : 'Nothing without a date.';
+                    sec.appendChild(e);
+                }
+                items.forEach(t => sec.appendChild(todoNode(t, todos, 0)));
+                if (key !== 'later') {
+                    sec.ondragover = e => {
+                        if (!dragState || dragState.arr !== todos) return;
+                        e.preventDefault();
+                        sec.classList.add('drop-target');
+                    };
+                    sec.ondragleave = e => { if (!sec.contains(e.relatedTarget)) sec.classList.remove('drop-target'); };
+                    sec.ondrop = e => {
+                        if (!dragState || dragState.arr !== todos) return;
+                        e.preventDefault();
+                        const it = dragState.item;
+                        todos.splice(todos.indexOf(it), 1);
+                        todos.push(it);                      // dropped on the section itself: goes to the end of it
+                        todoSetSection(it, key);
+                        dragState = null;
+                        saveNotes();
+                        renderTodos();
+                    };
+                }
+                list.appendChild(sec);
+            });
             if (focusId) {
                 const el = list.querySelector(`[data-id="${focusId}"]`);
                 if (el) el.focus();
@@ -610,7 +698,7 @@
             const grip = document.createElement('span');
             grip.className = 'todo-grip';
             grip.textContent = '⋮⋮';
-            grip.title = 'Drag to reorder';
+            grip.title = depth === 0 ? 'Drag to reorder, or onto another section to change its due date' : 'Drag to reorder';
             grip.draggable = true;
             grip.ondragstart = e => { dragState = { item, arr: parentArr }; wrap.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.id); };
             grip.ondragend = () => { wrap.classList.remove('dragging'); dragState = null; document.querySelectorAll('.drop-above,.drop-below').forEach(x => x.classList.remove('drop-above', 'drop-below')); };
@@ -629,6 +717,8 @@
                 parentArr.splice(from, 1);
                 let to = parentArr.indexOf(item) + (below ? 1 : 0);
                 parentArr.splice(to, 0, dragState.item);
+                if (depth === 0) todoSetSection(dragState.item, todoSection(item));   // moving onto a row in another section adopts that section's date
+                e.stopPropagation();
                 dragState = null;
                 saveNotes();
                 renderTodos();
@@ -923,7 +1013,7 @@
         // Source of truth: streams.json (also edited by Claude Code). Every edit re-reads the file, applies one change,
         // and writes it back only if nobody changed it in between. Status is never inferred: it all comes from the file.
         // The "last activity" line is computed by the server from file times and is display-only.
-        let stData = null, stAct = {}, stFilter = 'active', stBusy = false;
+        let stData = null, stAct = {}, stFilter = 'active', stBusy = false, stSortNear = lsGet('stSortNear') === '1';
         const ST_LABEL = { paper: 'Papers', report: 'Reports', whitepaper: 'White papers', software: 'Software' };
         const ST_DONE_GROUPS = [['Refereed papers', ['paper']], ['Reports', ['report']], ['White papers', ['whitepaper']], ['Software', ['software']], ['Working papers & chapters', ['workingpaper', 'chapter']]];
         const ST_REJECTABLE = ['Submitted', 'R&R', 'Resubmitted'];
@@ -1074,6 +1164,58 @@
             return `<div class="st-fact">Last activity: <span class="st-mono">${esc(a.file)}</span>, ${ago}` +
                 (a.days > lim ? ` <span class="st-flag">No activity in ${a.days} days</span>` : '') + '</div>';
         }
+        // Activity LED. Click it to pick Focus, Active, Cooling or Dormant yourself, or Auto. A manual pick stays until you change it
+        // (Focus is limited to 3 items). Auto follows the most recent sign of work: a file in the folder or a dated history entry
+        // (stage, court, due, next, shelve). A blue ring means the court is not yours.
+        const ST_FOCUS_MAX = 3, ST_HOT_DAYS = 7, ST_COOL_DAYS = 30;
+        const ST_TEMPS = [['focus', 'Focus'], ['active', 'Active'], ['cooling', 'Cooling'], ['dormant', 'Dormant'], ['auto', 'Auto']];
+        let stLedOpen = null;
+        const stDaysAgo = ds => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ds || '')); if (!m) return null; const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((t - new Date(+m[1], +m[2] - 1, +m[3])) / 864e5); };
+        const stManual = it => (it.temp === 'focus' || it.temp === 'active' || it.temp === 'cooling' || it.temp === 'dormant') ? it.temp : (stDaysAgo(it.focus) !== null ? 'focus' : null);
+        function stLastWork(it) {
+            let best = null, why = '';
+            const a = stAct[it.id];
+            if (a && !a.missing && !a.empty && typeof a.days === 'number') { best = a.days; why = 'file ' + (a.file || ''); }
+            const h = (it.history || []).map(x => stDaysAgo(x.date)).filter(x => x !== null && x >= 0);
+            if (h.length) { const m = Math.min(...h); if (best === null || m < best) { best = m; why = 'a change in Streams'; } }
+            return { days: best, why };
+        }
+        function stLed(it) {
+            const w = !!it.ball && it.ball !== 'You', ring = w ? ' wait' : '', man = stManual(it);
+            let cls, tip;
+            if (man) { cls = man; tip = 'Set by you: ' + man + '.'; }
+            else {
+                const lw = stLastWork(it);
+                if (lw.days === null) { cls = 'dormant'; tip = 'Auto: no activity signal yet.'; }
+                else {
+                    cls = lw.days <= ST_HOT_DAYS ? 'active' : lw.days <= ST_COOL_DAYS ? 'cooling' : 'dormant';
+                    tip = 'Auto: ' + cls + ', last activity ' + (lw.days === 0 ? 'today' : lw.days + ' day' + (lw.days === 1 ? '' : 's') + ' ago') + ' (' + lw.why + ').';
+                }
+            }
+            tip += ' Click to change.'; if (w) tip += ' Blue ring: with ' + it.ball + '.';
+            const menu = stLedOpen === it.id ? `<div class="st-ledmenu">${ST_TEMPS.map(([k, l]) => `<button class="st-ledopt${(man || 'auto') === k ? ' on' : ''}" data-temp="${k}"><span class="st-led ${k === 'auto' ? 'dormant' : k}"></span>${l}</button>`).join('')}</div>` : '';
+            return `<span class="st-ledwrap"><span class="st-led ${cls}${ring}" title="${esc(tip)}"></span>${menu}</span>`;
+        }
+        async function stSetTemp(id, val) {
+            let capped = false;
+            stLedOpen = null;
+            await stEdit('temperature ' + id, d => {
+                const it = stFind(d, id); if (!it) return false;
+                if (val === 'focus' && stManual(it) !== 'focus') {
+                    const n = (d.items || []).filter(x => x.status === 'active' && x.id !== id && stManual(x) === 'focus').length;
+                    if (n >= ST_FOCUS_MAX) { capped = true; return false; }
+                }
+                delete it.focus;
+                if (val === 'auto') delete it.temp; else it.temp = val;
+            });
+            if (capped) stMsg('Three items are already in focus. Set one of them to something else first.');
+        }
+
+        // Progress toward publication: position in the item's own pipeline, 0 (first stage) to 1 (last stage)
+        function stProgress(it) {
+            const pipe = (stData.pipelines || {})[it.type] || [], at = pipe.indexOf(it.stage);
+            return pipe.length > 1 && at >= 0 ? at / (pipe.length - 1) : 0;
+        }
         function stCard(it) {
             const pipe = (stData.pipelines || {})[it.type] || [];
             const at = pipe.indexOf(it.stage);
@@ -1083,8 +1225,8 @@
             const ball = it.ball ? (it.ball === 'You' ? '<span class="st-ball you" title="Click to change">Your court</span>' : `<span class="st-ball" title="Click to change">With: ${esc(it.ball)}</span>`) : '<span class="st-ball unset" title="Click to set">Set court</span>';
             const due = stDueShown(it) ? `<label class="st-lab">${it.type === 'paper' ? 'Revision due' : 'Due'} <input type="date" class="todo-due-input st-due" value="${esc(it.due || '')}"></label>` : '';
             return `<div class="st-card" data-id="${esc(it.id)}">
-                <div class="st-top"><div class="st-title">${esc(it.title)}</div>${ball}</div>
-                <div class="st-sub">${it.path ? `<span class="st-mono">${esc(it.path)}</span>` : ''}${it.tag ? `<span class="st-tag">${esc(it.tag)}</span>` : ''}</div>
+                <div class="st-top">${stLed(it)}<div class="st-title">${esc(it.title)}</div>${ball}</div>
+                <div class="st-sub">${stSortNear ? `<span class="st-tag">${esc(ST_LABEL[it.type] || it.type)}</span>` : ''}${it.path ? `<span class="st-mono">${esc(it.path)}</span>` : ''}${it.tag ? `<span class="st-tag">${esc(it.tag)}</span>` : ''}</div>
                 <div class="st-bar">${bar}</div>
                 <div class="st-ctl">
                     <label class="st-lab">Stage <select class="st-stage">${opts}</select></label>
@@ -1114,9 +1256,13 @@
             document.getElementById('stIdeasSec').style.display = onIdeas ? '' : 'none';
             document.getElementById('stActive').style.display = onIdeas ? 'none' : '';
             document.getElementById('stChips').innerHTML = [['active', 'Active'], ...Object.entries(ST_LABEL), ['ideas', 'Ideas (' + ideas.length + ')']].map(([k, l]) =>
-                `<button class="st-chip${stFilter === k ? ' on' : ''}" data-f="${k}">${l}</button>`).join('');
+                `<button class="st-chip${stFilter === k ? ' on' : ''}" data-f="${k}">${l}</button>`).join('') +
+                `<button class="st-chip${stSortNear ? ' on' : ''}" id="stSort" title="Order by how far along each item is in its pipeline">Closest to published first</button>`;
             const types = Object.keys(stData.pipelines || {}).filter(t => stFilter === 'active' || t === stFilter);
-            document.getElementById('stActive').innerHTML = types.map(t => {
+            document.getElementById('stActive').innerHTML = stSortNear ? (() => {
+                const list = active.filter(x => types.includes(x.type)).sort((a, b) => stProgress(b) - stProgress(a) || String(a.title).localeCompare(String(b.title)));
+                return list.length ? list.map(stCard).join('') : '';
+            })() || '<div class="muted">Nothing active here.</div>' : types.map(t => {
                 const list = active.filter(x => x.type === t);
                 return list.length ? `<div class="st-group">${esc(ST_LABEL[t] || t)}</div>` + list.map(stCard).join('') : '';
             }).join('') || '<div class="muted">Nothing active here.</div>';
@@ -1140,7 +1286,10 @@
         document.addEventListener('click', e => {
             const t = e.target; if (!t.closest || !t.closest('#tab-streams')) return;
             const card = t.closest('[data-id]'), id = card && card.dataset.id;
-            if (t.classList.contains('st-chip')) { stFilter = t.dataset.f; renderStreams(); }
+            if (stLedOpen && !t.closest('.st-ledwrap')) { stLedOpen = null; renderStreams(); }
+            if (t.classList.contains('st-chip') && t.dataset.f) { stFilter = t.dataset.f; renderStreams(); }
+            else if (t.closest('.st-ledopt')) { const o = t.closest('.st-ledopt'); stSetTemp(id, o.dataset.temp); }
+            else if (t.classList.contains('st-led') && id) { stLedOpen = stLedOpen === id ? null : id; renderStreams(); }
             else if (t.classList.contains('st-shelve')) stShelve(id);
             else if (t.classList.contains('st-revive')) stRevive(id);
             else if (t.classList.contains('st-act')) stActivate(id);
@@ -1156,6 +1305,7 @@
                 document.getElementById('stIdeaForm').style.display = 'none';
             }
             else if (t.id === 'stReload') loadStreams();
+            else if (t.id === 'stSort') { stSortNear = !stSortNear; lsSet('stSortNear', stSortNear ? '1' : '0'); renderStreams(); }
         });
         document.addEventListener('change', e => {
             const t = e.target; if (!t.closest || !t.closest('#tab-streams')) return;
@@ -1212,7 +1362,7 @@
                 }
                 const s = await (await fetch('http://localhost:8000/api/status', { cache: 'no-store' })).json();
                 const el = document.getElementById('asstStatus');
-                el.innerText = s.assistant ? 'Assistant: ' + s.assistant : '';
+                el.innerText = s.assistant ? 'Otis: ' + s.assistant : '';
                 el.classList.toggle('alert', !!s.alert);
             } catch (e) {}
         }

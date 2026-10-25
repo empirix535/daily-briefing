@@ -8,7 +8,9 @@ $BackupFiles = @("settings.json", "data\todo.json",
 function Backup-PersonalData {
     $od = @($env:OneDriveCommercial, $env:OneDrive) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
     if (-not $od) { Write-Log "No OneDrive folder found; skipped the backup." "WARN"; return }
-    $root = Join-Path $od "Daily Briefing backup"
+    $root = Join-Path $od "Otis backup"
+    $oldRoot = Join-Path $od "Daily Briefing backup"   # the folder's old name: rename it once so earlier backups carry over
+    if ((Test-Path $oldRoot) -and -not (Test-Path $root)) { try { Rename-Item -LiteralPath $oldRoot -NewName "Otis backup" } catch { Write-Log "Could not rename the backup folder: $($_.Exception.Message)" "WARN" } }
     $latest = Join-Path $root "latest"
     $n = 0
     foreach ($rel in $BackupFiles) {
@@ -38,16 +40,9 @@ function Invoke-Step {
     if ($sync.SecretaryPauseToggle) {
         $sync.SecretaryPauseToggle = $false
         $state.Paused = -not $state.Paused; Save-State
-        try { Send-Chat $(if ($state.Paused) { "Paused from the tray. Type resume to turn me back on." } else { "Back on." }) } catch {}
+        try { Send-Chat $(if ($state.Paused) { "Paused." } else { "Back on." }) } catch {}
     }
     $sync.SecretaryPaused = [bool]$state.Paused
-    if ($sync.SecretaryPinToggle) {
-        $sync.SecretaryPinToggle = $false
-        $state.ChatPin = -not [bool]$state.ChatPin
-        if ($state.ChatPin) { $script:PinForce = $true }
-        Save-State
-    }
-    $sync.SecretaryChatPin = [bool]$state.ChatPin
 
     # Keep the Teams window hidden unless Wael asked to see it (tray) or Teams needs a sign-in
     $wantShow = [bool]$sync.SecretaryShowWindow
@@ -55,8 +50,7 @@ function Invoke-Step {
     if ($tgt -and $tgt.url -match 'login\.microsoftonline') { $wantShow = $true }
     try {
         if ($wantShow) { Set-TeamsWindow $true }
-        elseif ($state.ChatPin) { Set-TeamsPinned $true }
-        else { Set-TeamsPinned $false; Set-TeamsWindow $false }
+        else { Set-TeamsWindow $false }
     } catch { Write-Log "Could not change the Teams window: $($_.Exception.Message)" "WARN" }
     if (-not $tgt) {
         if (((Get-Date) - $script:LastLaunch).TotalMinutes -ge 2) { $script:LastLaunch = Get-Date; Start-TeamsBrowser }
@@ -82,23 +76,28 @@ function Invoke-Step {
     }
 
     $msgs = @($snap.msgs | Where-Object { $_.mid -match '^\d+$' } | Sort-Object { [long]$_.mid })
-    if ([long]$state.LastMid -eq 0) {
-        # First run: ignore the chat history
-        if ($msgs) { $state.LastMid = [long]$msgs[-1].mid }
+    # Track messages by id, not by "newer than the last id": one odd, huge id (seen once) made every later message look old
+    if ($null -eq $state.SeenMids) {
+        # First run: ignore the chat history already on screen
+        $upg = @($snap.msgs | Where-Object { $_.mid -match '^\d+$' })
+        $state.SeenMids = @($upg | ForEach-Object { [string]$_.mid })
         Save-State
     }
     if (-not $state.Introduced) {
         $state.Introduced = $true; Save-State
-        Send-Chat "Assistant is on. I'll post reminders here and answer your questions. Type help for commands."
+        Send-Chat "Otis is on. Reminders and answers will show up here."
     }
 
-    $new = @($msgs | Where-Object { [long]$_.mid -gt [long]$state.LastMid })
+    $seenM = @{}; foreach ($m in @($state.SeenMids)) { $seenM[[string]$m] = 1 }
+    $new = @($msgs | Where-Object { -not $seenM.ContainsKey([string]$_.mid) })
     if ($new) {
-        $state.LastMid = [long]$new[-1].mid; Save-State   # saved first so a failure never loops
+        $state.SeenMids = @(@($state.SeenMids) + @($new | ForEach-Object { [string]$_.mid }) | Select-Object -Last 300)
+        Save-State   # saved first so a failure never loops
         $texts = @($new | Where-Object { -not (Test-Ours $_) -and $_.text } | ForEach-Object { [string]$_.text })
         if ($texts) {
             Write-Log "New message(s) from $($U): $($texts.Count)"
-            Invoke-UserMessages $texts
+            $script:AckPending = $true
+            try { Invoke-UserMessages $texts } finally { $script:AckPending = $false }
         }
     }
 

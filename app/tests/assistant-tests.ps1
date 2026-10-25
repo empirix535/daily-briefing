@@ -108,7 +108,7 @@ Check "show prints a short page" ($r -match 'General notes:' -and $r -match 'lan
 $script:ClaudeQueue.Enqueue("# Home`r`nWed Oct 14  call the landlord about the leak`r`n`r`n# Research`r`nidea about the tracer study")
 $before = Read-NotePage General
 $r = Say "tidy general"
-Check "tidy proposes, writes nothing yet" ((Read-NotePage General) -ceq $before -and $r -match 'Reply yes to apply') $r
+Check "tidy proposes, writes nothing yet" ((Read-NotePage General) -ceq $before -and $r -match 'Apply it\?') $r
 $r = Say "yes"
 Check "yes applies the tidy and keeps a backup" ((Read-NotePage General) -match '# Home' -and @(Get-ChildItem (Join-Path $NotesDir "_removed")).Count -ge 1) $r
 
@@ -183,10 +183,32 @@ Check "scan prompt checks the connector first and stays read-only" ($script:Prom
 $script:ClaudeQueue.Enqueue($scan1)
 $script:Out.Clear(); $ok = Invoke-MailScan $now 'normal'
 Check "a repeat scan is silent (threads already seen)" ($ok -and @($script:Out).Count -eq 0) (@($script:Out) -join ' | ')
+$n0 = $script:Prompts.Count
+$script:ClaudeQueue.Enqueue("Already handled everything in that list; nothing new."); $script:ClaudeQueue.Enqueue($scan1)
+$script:Out.Clear(); $ok = Invoke-MailScan $now 'normal'
+$ml = Format-MailLine ([pscustomobject]@{ line = "Robin wants an answer."; deadline = ""; doc = "mail:///messages/AAMk%3D"; link = "https://outlook.office.com/mail/id/1" })
+Check "non-web doc ids are dropped and the message link is not used" ($ml -eq "Robin wants an answer.") $ml
+$old = Remove-BadDoc "Robin wants an answer. (by Sat Oct 24) Doc: mail:///messages/AAMk%3D"
+Check "saved lines lose a mail:/// Doc link" ($old -eq "Robin wants an answer. (by Sat Oct 24)") $old
+Check "saved lines keep an https Doc link" ((Remove-BadDoc "Read it. Doc: https://x.org/a") -eq "Read it. Doc: https://x.org/a")
+$ml2 = Format-MailLine ([pscustomobject]@{ line = "Lee says hi."; deadline = ""; doc = "mail:///x"; link = "" })
+Check "a non-web doc with no link is left out" ($ml2 -eq "Lee says hi.") $ml2
+Check "a prose reply is retried once and then succeeds quietly" ($ok -and @($script:Out).Count -eq 0 -and ($script:Prompts.Count - $n0) -eq 2) "$ok / $(@($script:Out) -join ' | ') / $($script:Prompts.Count - $n0)"
 Check "second scan passes the seen list to the model" ($script:Prompts[-1] -match 'T1\|') ""
 
+$sync.SecretaryToasts = [System.Collections.Queue]::Synchronized((New-Object System.Collections.Queue))
+Send-Toast "Reminder:   call   Lee"
+Check "a toast is queued with tidy spacing" ($sync.SecretaryToasts.Count -eq 1 -and $sync.SecretaryToasts.Peek() -eq "Reminder: call Lee") "$($sync.SecretaryToasts.Count)"
+[void]$sync.SecretaryToasts.Dequeue()
+$script:Out.Clear(); Send-MailAlert @([pscustomobject]@{ key = "Z1"; from = "Kim"; subject = "S"; line = "Kim wants a reply. Doc: mail:///x"; link = "" }) "Head"
+Check "an email alert queues a toast without the bad Doc link" ($sync.SecretaryToasts.Count -eq 1 -and $sync.SecretaryToasts.Peek() -eq "1 email needs you: Kim wants a reply.") ([string]$sync.SecretaryToasts.Peek())
+[void]$sync.SecretaryToasts.Dequeue()
 # Failure streak: one message, then quiet, then recovery
 $bad = Json @{ health = @{ ok = $false; error = "AADSTS65001 consent required"; scopes = @() }; threads = @(); meetings = @() }
+$script:ClaudeQueue.Enqueue($bad); $script:ClaudeQueue.Enqueue($bad); $script:Out.Clear(); $state.ScanFailAt = $null; $state.GreetFailDay = $null
+[void](Invoke-MailScan $now 'greeting')
+Check "a failed morning check still sends the to-do agenda" ((@($script:Out) -join ' ') -match 'AADSTS65001' -and (@($script:Out) -join ' ') -match '(?i)to-dos') (@($script:Out) -join ' | ')
+$state.ScanFailAt = $null; $state.GreetFailDay = $null; [void]$script:ClaudeQueue.Dequeue()
 $script:ClaudeQueue.Enqueue($bad); $script:Out.Clear(); $ok = Invoke-MailScan $now 'normal'
 Check "connector failure posts the AADSTS error" (-not $ok -and (@($script:Out) -join ' ') -match 'AADSTS65001') (@($script:Out) -join ' ')
 $script:ClaudeQueue.Enqueue($bad); $script:Out.Clear(); [void](Invoke-MailScan $now 'normal')
@@ -239,7 +261,7 @@ $it = @((Get-Todos) | Where-Object { $_.text -eq "Decline the review" })[0]
 Check "router to-do from a numbered email gets the mail link" ($it -and [string]$it.mailLink -eq "https://x/m11") $r
 $script:ClaudeQueue.Enqueue('{"route":"mail","reply":""}'); $script:ClaudeQueue.Enqueue('{"reply":"","todos":[]}')
 $r = Say "what did Priya say?"
-Check "an unknown thread gets a nudge, not silence" ($r -match 'sender or subject') $r
+Check "an unknown thread gets an answer, not silence" ($r -match "couldn't find that thread") $r
 
 # FYI batch
 $state.FyiItems = @([pscustomobject]@{ key = "T3"; line = "Lee says the site visit moved to Monday." })
@@ -249,6 +271,18 @@ $state.FyiSlot = ""; $state.FyiItems = @([pscustomobject]@{ key = "T3"; line = "
 $script:Out.Clear(); Invoke-FyiBatch ([datetime]'2026-10-12 12:05')
 Check "noon slot sends the batch once" ((@($script:Out) -join ' ') -match 'FYI email since') ""
 $script:Out.Clear(); Invoke-FyiBatch ([datetime]'2026-10-12 12:20'); Check "and not twice" (@($script:Out).Count -eq 0) ""
+$nowS = (Get-Date).ToString('s'); $oldS = (Get-Date).AddHours(-30).ToString('s'); $midS = (Get-Date).AddHours(-3).ToString('s')
+$state.FyiItems = @(
+  [pscustomobject]@{ key = "O1"; line = "Old news."; from = "A"; subject = "Old thing"; link = ""; at = $oldS },
+  [pscustomobject]@{ key = "D1"; line = "First on the chain."; from = "T"; subject = "Meeting Oct 27-29"; link = ""; at = $midS },
+  [pscustomobject]@{ key = "D2"; line = "Newest on the chain."; from = "T"; subject = "RE: Meeting Oct 27-29"; link = ""; at = $nowS },
+  [pscustomobject]@{ key = "N1"; line = "Untimed legacy item."; from = "B"; subject = "Legacy"; link = "" })
+$script:Out.Clear(); Send-FyiBatch
+$o = (@($script:Out) -join ' ')
+Check "FYI roundup drops items older than 24 hours" ($o -notmatch 'Old news') $o
+Check "FYI roundup keeps one line per email chain, the newest" ($o -match 'Newest on the chain' -and $o -notmatch 'First on the chain') $o
+Check "FYI roundup keeps untimed legacy items" ($o -match 'Untimed legacy') $o
+$script:RoundupBase = 0; $state.LastAlert = @()
 
 # Unanswered email: tracked at scan time, checked at the roundup
 $state.RespTrack = @(
@@ -273,6 +307,10 @@ $script:Out.Clear(); Send-ReplyCheck ([datetime]'2026-10-15 12:00')
 Check "a second ask comes after three days" ((@($script:Out) -join ' ') -match 'Ana needs') (@($script:Out) -join ' ')
 $script:Out.Clear(); $r = Say "skip 1"
 Check "skip stops the asking" ($r -match "won't ask about 1" -and (Get-ReplyTrack | Where-Object { $_.key -eq 'R2' }).skip -eq $true) $r
+foreach ($r in (Get-ReplyTrack)) { $r.skip = $false }
+$state.LastAlert = @(1..3 | ForEach-Object { [pscustomobject]@{ n = $_; key = "R$_"; from = "x"; subject = "x"; link = "" } })
+$script:Out.Clear(); $r = Say "for the emails I haven't responded to you can clear out 1 2 and 3"
+Check "a natural clear-out request skips the numbered items" ($r -match "won't ask about 2, 3" -and @(Get-ReplyTrack | Where-Object { $_.key -in 'R2', 'R3' -and $_.skip }).Count -eq 2) $r
 foreach ($r in (Get-ReplyTrack)) { $r.skip = $true }
 $script:Out.Clear(); Send-ReplyCheck ([datetime]'2026-10-20 12:00')
 Check "a skipped item stays quiet" (@($script:Out).Count -eq 0) ""
@@ -299,7 +337,7 @@ $script:ClaudeQueue.Enqueue((Json @{ results = @() }))
 $script:Out.Clear(); Invoke-FyiBatch ([datetime]'2026-10-12 12:05')
 $a = [string]$script:Out[0]; $b = [string]$script:Out[1]
 Check "FYI roundup is numbered with a blank line between items" ($a -match '1\. Lee says' -and $a -match '(?s)1\. Lee[^\n]*\n\n2\. Surina') $a
-Check "the reply list continues after the FYI numbers and both are addressable" ($b -match '3\. Ana needs' -and $b -match 'reply to 3' -and @($state.LastAlert).Count -eq 3 -and @($state.LastAlert)[2].key -eq 'R9' -and @($state.LastAlert)[0].key -eq 'F1') $b
+Check "the reply list continues after the FYI numbers and both are addressable" ($b -match '3\. Ana needs' -and $b -match 'planning to reply' -and @($state.LastAlert).Count -eq 3 -and @($state.LastAlert)[2].key -eq 'R9' -and @($state.LastAlert)[0].key -eq 'F1') $b
 
 # Pre-meeting prompt and brief
 $script:Ask = $null
@@ -334,7 +372,67 @@ Check "help lists email and calendar" ($r -match 'EMAIL:' -and $r -match 'CALEND
 $r = Say "morning"
 Check "morning brief lists meetings and to-dos" ($r -match 'To-dos for today|No to-dos due') $r
 
+# ---- "todo:" with sub-items spelled out
+$sp = Split-TodoSubitems "start the H-IUD HMB CEA manuscript and add a sub item underneath it to figure out which journal to send it to"
+Check "todo: splits main and sub-item" ($sp.main -eq "Start the H-IUD HMB CEA manuscript" -and @($sp.subs).Count -eq 1 -and $sp.subs[0] -eq "Figure out which journal to send it to") ($sp | ConvertTo-Json -Compress)
+$sp = Split-TodoSubitems "write the Senegal report with sub-items: draft intro, build tables and send to Nathalie"
+Check "todo: with sub-items list" ($sp.main -eq "Write the Senegal report" -and @($sp.subs).Count -eq 3) ($sp | ConvertTo-Json -Compress)
+$sp = Split-TodoSubitems "buy printer paper"
+Check "todo: plain text stays one item" ($sp.main -eq "buy printer paper" -and @($sp.subs).Count -eq 0) ""
+$r = Say "todo: start the review and add a sub item under it to ask Lee for the data"
+$rv = @((Get-Todos) | Where-Object { [string]$_.text -eq "Start the review" }) | Select-Object -First 1
+Check "todo: command nests the sub-item" ($rv -and @($rv.children).Count -eq 1 -and [string]$rv.children[0].text -eq "Ask Lee for the data") $r
+
+# ---- a new to-do and its sub-items in one request
+$null = Add-TodoItems @(@{ text = "Start the H-IUD manuscript" }, @{ text = "Figures"; parent = "Start the H-IUD manuscript" }, @{ text = "Tables"; parent = "Start the H-IUD manuscript" })
+$p = @((Get-Todos) | Where-Object { [string]$_.text -eq "Start the H-IUD manuscript" }) | Select-Object -First 1
+Check "parent and sub-items added together nest" ($p -and @($p.children).Count -eq 2 -and [string]$p.children[0].text -eq "Figures") ""
+
 Remove-Item $data -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ""
+
+# ---- vague reminder times draw a random time inside a window
+$base = [datetime]'2026-10-20 08:00'
+$bad = 0; $seenT = @{}
+foreach ($i in 1..60) {
+    foreach ($c in @(@('before noon', '11:00', '11:30'), @('before COB', '15:30', '16:30'), @('this afternoon', '14:30', '15:30'))) {
+        $it = [pscustomobject]@{ text = 'x'; kind = 'once'; at = '2026-10-20T09:00' }
+        Set-FuzzyTimes @($it) ("reminder to upload slides " + $c[0]) $base
+        $tm = $it.at.Substring(11); $seenT[$tm] = 1
+        if ($it.at.Substring(0, 10) -ne '2026-10-20' -or $tm -lt $c[1] -or $tm -gt $c[2]) { $bad++ }
+    }
+}
+Check "vague times land inside their windows" ($bad -eq 0) "$bad outside"
+Check "vague times vary between draws" ($seenT.Count -gt 10) "$($seenT.Count) distinct"
+$it = [pscustomobject]@{ text = 'x'; kind = 'once'; at = '2026-10-20T11:50' }
+Set-FuzzyTimes @($it) "before noon" ([datetime]'2026-10-20 11:20')
+Check "a window already partly over today starts after now" ($it.at.Substring(11) -ge '11:22' -and $it.at.Substring(11) -le '11:30') $it.at
+$it = [pscustomobject]@{ text = 'x'; kind = 'once'; at = '2026-10-20T13:00' }
+Set-FuzzyTimes @($it) "before noon" ([datetime]'2026-10-20 12:30')
+Check "a window already over leaves the model's time" ($it.at -eq '2026-10-20T13:00') $it.at
+$it = [pscustomobject]@{ text = 'x'; kind = 'once'; at = '2026-10-21T07:00' }
+Set-FuzzyTimes @($it) "tomorrow before noon" ([datetime]'2026-10-20 12:30')
+Check "tomorrow keeps the model's date" ($it.at -match '^2026-10-21T11:[0-3]\d$') $it.at
+
+
+# ---- links in bot messages become anchors
+$h = ConvertTo-HtmlLinks ([System.Net.WebUtility]::HtmlEncode("Doc: https://x.sharepoint.com/:w:/r/sites/a/b%20c.docx?d=w1&e=2 and see https://short.example/a."))
+Check "long links become an anchor titled open link" ($h -match '<a href="https://x\.sharepoint\.com/[^"]*&amp;e=2">open link</a>') $h
+Check "short links show themselves and drop trailing punctuation" ($h -match '<a href="https://short\.example/a">https://short\.example/a</a>\.') $h
+
+
+# ---- loose matching of to-do wording
+$tl = @([pscustomobject]@{ id = "a1"; text = "Resubmit Rwanda paper"; checked = $false; children = @() },
+        [pscustomobject]@{ id = "a2"; text = "Submit class size and quality paper"; checked = $false; children = @() },
+        [pscustomobject]@{ id = "a3"; text = "Submit Senegal paper"; checked = $false; children = @() })
+Check "loose match: dropped prefix" ((Resolve-TodoText "Rwanda paper submission" $tl) -eq "Resubmit Rwanda paper") (Resolve-TodoText "Rwanda paper submission" $tl)
+Check "loose match: trailing due suffix" ((Resolve-TodoText "Resubmit Rwanda paper (overdue, Oct 14)" $tl) -eq "Resubmit Rwanda paper") ""
+Check "loose match: reworded" ((Resolve-TodoText "class size and quality paper submission" $tl) -eq "Submit class size and quality paper") ""
+Check "loose match: ambiguous or unrelated returns nothing" (-not (Resolve-TodoText "paper" $tl) -and -not (Resolve-TodoText "buy milk" $tl)) ""
+
+
+$ct = @($Commands | Where-Object { $_.Use -like 'connector test*' })
+Check "connector test command is registered and matches" ($ct.Count -eq 1 -and 'connector test' -match $ct[0].Rx -and 'connector check' -match $ct[0].Rx -and $ct[0].When -eq 'Early') "$($ct.Count)"
+
 Write-Host "$script:Pass passed, $script:Fail failed"
 if ($script:Fail) { exit 1 }

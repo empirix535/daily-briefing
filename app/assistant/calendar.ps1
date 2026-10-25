@@ -48,7 +48,7 @@ function Get-DayMeetings([datetime]$Day) {
         ((Get-Date) - [datetime]$state.MeetingsAt).TotalMinutes -lt 20) { return (Get-CachedMeetings) }
     if (-not (Test-CallBudget)) { throw "today's Claude call limit is reached" }
     $prompt = @"
-Read $U's calendar. Call get_granted_scopes first. If it fails, return {"ok": false, "error": "the error text, including any AADSTS code", "meetings": []} and stop.
+Read $U's calendar. Use outlook_calendar_search and never call get_granted_scopes. If the search fails, return {"ok": false, "error": "the error text, starting with the exact name of the tool that failed, and any AADSTS code", "meetings": []} and stop.
 $(Get-MeetingsPromptPart $Day)
 Answer with one JSON object and nothing else: {"ok": true, "error": "", "meetings": [...]}
 "@
@@ -110,9 +110,11 @@ function Invoke-MeetingPrompts([datetime]$Now) {
         Save-State
         if (-not $script:Ask) {
             Set-Ask 'prep' $state.PrepLast 40
-            Send-Chat "Need prep for ""$($m.subject)"" at $($s.ToString('h:mm tt', $Inv))? Reply yes for a brief, or no."
+            Send-Toast "Meeting at $($s.ToString('h:mm tt', $Inv)): $($m.subject)"
+            Send-Chat "Need prep for ""$($m.subject)"" at $($s.ToString('h:mm tt', $Inv))?"
         } else {
-            Send-Chat "Meeting at $($s.ToString('h:mm tt', $Inv)): ""$($m.subject)"". Type prep for a brief."
+            Send-Toast "Meeting at $($s.ToString('h:mm tt', $Inv)): $($m.subject)"
+            Send-Chat "Meeting at $($s.ToString('h:mm tt', $Inv)): ""$($m.subject)""."
         }
     }
 }
@@ -129,7 +131,7 @@ Meeting: $($M.subject), starting $($M.start) (local time). Attendees: $who.
 Write plain text for a chat message, no markdown, under 1200 characters: what the meeting is about, what is expected of $U, and the latest relevant emails (who, when, the point). Put a document link on its own line if there is one. If you find nothing, say so in one sentence. Never offer to send, draft, or change anything.
 "@
     try { Send-Chat ("Prep for ""$($M.subject)"":`n" + (Invoke-SecConnector $prompt -Plain).Trim()) }
-    catch { Write-Log "Prep brief failed: $($_.Exception.Message)" "WARN"; Send-Chat "I couldn't build the brief: $($_.Exception.Message)" }
+    catch { Write-Log "Prep brief failed: $($_.Exception.Message)" "WARN"; Send-Chat "I couldn't build the brief: $(Get-PlainError $_.Exception.Message)" }
 }
 
 # ------------------------------------------------------------------ calendar questions (read-only) and pre-filled events
@@ -164,8 +166,8 @@ You cannot create, move, accept, decline, or cancel anything. For free times, na
             $url = New-EventLink ([string]$e.subject) $s $en @(@($e.attendees) | Where-Object { $_ -match '^[^@\s]+@[^@\s]+$' }) ([string]$e.location) ([string]$e.body)
             Send-Chat "$($e.subject), $(Format-Time $s) to $($en.ToString('h:mm tt', $Inv))" $url "Open pre-filled event"
         }
-        if (-not [string]$res.reply -and -not $evs.Count) { Send-Chat "I couldn't tell what to put on your calendar. Tell me the day, time, and who is invited." }
-    } catch { Write-Log "Calendar request failed: $($_.Exception.Message)" "WARN"; Send-Chat "I couldn't read your calendar: $($_.Exception.Message)" }
+        if (-not [string]$res.reply -and -not $evs.Count) { Send-Chat "I couldn't tell what to put on your calendar. What day, time, and who?" }
+    } catch { Write-Log "Calendar request failed: $($_.Exception.Message)" "WARN"; Send-Chat "I couldn't read your calendar: $(Get-PlainError $_.Exception.Message)" }
 }
 
 # ------------------------------------------------------------------ pre-filled Outlook on the web event link (no write by the bot)

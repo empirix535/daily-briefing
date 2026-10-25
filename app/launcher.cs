@@ -1,4 +1,4 @@
-// Daily Briefing launcher (built into DailyBriefing.exe by Install.ps1 with the C# compiler included in Windows).
+// Otis launcher (built into DailyBriefing.exe by Install.ps1 with the C# compiler included in Windows).
 //   1. Starts app\server.ps1 hidden (tray icon only) if the server is not already running.
 //   2. Opens the dashboard window (Chrome, else Edge), or brings it to the front if it is already open
 //      (including a window the tray app hid when it was minimized).
@@ -23,7 +23,7 @@ using Microsoft.Win32;
 static class Program
 {
     const string AppId = "DailyBriefing.Dashboard";
-    const string WindowTitle = "Daily Briefing";
+    const string WindowTitle = "Otis";
 
     [STAThread]
     static int Main(string[] args)
@@ -52,7 +52,7 @@ static class Program
                 psi.WorkingDirectory = baseDir;
                 Process.Start(psi);
                 for (int i = 0; i < 60 && !ServerUp(url); i++) Thread.Sleep(500);
-                if (!ServerUp(url)) { Warn("The Daily Briefing server did not start.\nCheck data\\server.log for details."); return 1; }
+                if (!ServerUp(url)) { Warn("Otis did not start.\nCheck data\\server.log for details."); return 1; }
             }
 
             if (!background)
@@ -67,7 +67,7 @@ static class Program
                 else
                 {
                     OpenWindow(url);
-                    // Wait for the page to load (its title becomes "Daily Briefing"), then tag the window
+                    // Wait for the page to load (its title becomes "Otis"), then tag the window
                     for (int i = 0; i < 60; i++)
                     {
                         Thread.Sleep(300);
@@ -143,7 +143,7 @@ static class Program
 
     static void Warn(string text)
     {
-        MessageBox.Show(text, "Daily Briefing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        MessageBox.Show(text, "Otis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 }
 
@@ -223,7 +223,7 @@ static class Taskbar
             IPropertyStore store;
             if (SHGetPropertyStoreForWindow(hwnd, ref iid, out store) != 0 || store == null) return;
             Set(store, KeyRelaunchCommand, "\"" + exePath + "\"");
-            Set(store, KeyRelaunchName, "Daily Briefing");
+            Set(store, KeyRelaunchName, "Otis");
             Set(store, KeyRelaunchIcon, exePath + ",0");
             Set(store, KeyAppId, appId);   // set last: the taskbar regroups when this changes
             Marshal.ReleaseComObject(store);

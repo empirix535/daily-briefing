@@ -32,6 +32,12 @@ function Invoke-ClaudeCli([string]$Prompt, [string]$Model, [string]$Sys, [string
     $psi.EnvironmentVariables["MAX_THINKING_TOKENS"] = "0"
     $psi.EnvironmentVariables["ENABLE_CLAUDEAI_MCP_SERVERS"] = $(if ($McpOn) { "true" } else { "false" })
 
+    # A slow call (connector or the think model) made while answering Wael's message gets one short "working" line first.
+    if ($script:AckPending -and ($McpOn -or $Model -ne $Config.SecretaryModel)) {
+        $script:AckPending = $false
+        try { Send-Chat (Get-Random -InputObject @("On it.", "One sec, looking.", "Checking now.", "Give me a minute on this one.")) } catch { }
+    }
+
     Add-CallCount
     $proc = [System.Diagnostics.Process]::Start($psi)
     $outTask = $proc.StandardOutput.ReadToEndAsync()
@@ -57,7 +63,7 @@ function Invoke-SecClaude([string]$Prompt, [string]$Model = $Config.SecretaryMod
 
 # The Microsoft 365 connector, read tools only. Built-in tools stay unlisted, so the headless run cannot use them,
 # and any write tool the connector might gain is not on the list either. Returns the model's text.
-$ConnectorToolNames = @('get_me', 'get_granted_scopes', 'outlook_email_search', 'outlook_calendar_search', 'read_resource', 'find_meeting_availability')
+$ConnectorToolNames = @('get_me', 'outlook_email_search', 'outlook_calendar_search', 'read_resource', 'find_meeting_availability')
 function Invoke-SecConnector([string]$Prompt, [string]$Model = $Config.SecretaryThinkModel, [switch]$Plain, [int]$TimeoutSec = 300) {
     $allow = ($ConnectorToolNames | ForEach-Object { "mcp__claude_ai_Microsoft_365__$_" }) -join ","
     $sys = if ($Plain) { "You are an administrative assistant with read-only access to the user's Microsoft 365 data. Follow the instructions in the user message exactly." } else { "You are an administrative assistant with read-only access to the user's Microsoft 365 data. Follow the instructions in the user message exactly. After using the tools, answer with JSON only." }

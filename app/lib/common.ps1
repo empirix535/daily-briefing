@@ -1,4 +1,4 @@
-# Daily Briefing: shared helpers (loaded into the HTTP thread and the assistant thread; both get $sync)
+# Otis: shared helpers (loaded into the HTTP thread and the assistant thread; both get $sync)
 # Keep this file ASCII-only.
 
 $Config  = $sync.Config

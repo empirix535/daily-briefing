@@ -1,5 +1,5 @@
 # ================================================================== assistant/core.ps1
-# Daily Briefing assistant (v2). Runs in its own thread of server.ps1 ($sync is shared; lib\common.ps1 is loaded first).
+# Otis (v2). Runs in its own thread of server.ps1 ($sync is shared; lib\common.ps1 is loaded first).
 # It watches the Teams notes-to-self chat through a dedicated Chrome window, answers with Claude, and posts
 # reminders and alerts. It only ever writes to the notes-to-self chat and to local files. It never sends email,
 # never opens Outlook, and never messages anyone else. Keep every assistant file ASCII-only.
@@ -17,17 +17,18 @@ $MeetingsPath  = Join-Path $SecDir "meetings.json"     # today's meetings, writt
 $WorkDir       = Join-Path $env:TEMP "briefing-claude"
 if (-not (Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir | Out-Null }
 
-$Tag     = [char]::ConvertFromUtf32(0x1F916)
+$Tag     = [char]::ConvertFromUtf32(0x1F419)   # octopus: the marker at the start of every bot message
+$OldTags = @([char]::ConvertFromUtf32(0x1F916), [char]::ConvertFromUtf32(0x1F4CE), [char]::ConvertFromUtf32(0x1F43B))   # robot, paperclip, bear: earlier messages in the chat still carry these
+$BotName = if ($Config.BotName) { [string]$Config.BotName } else { "Otis" }   # name shown before each bot message (setting: BotName)
 $Port    = [int]$Config.SecretaryDebugPort
 $ChatUrl = "https://teams.cloud.microsoft/"
 
 # ------------------------------------------------------------------ state
-$state = @{ LastMid = 0L; Paused = $false; Posted = @(); NextReminderId = 1; LastReminderId = 0; Introduced = $false; CallsDay = ""; Calls = 0 }
+$state = @{ Paused = $false; Posted = @(); NextReminderId = 1; LastReminderId = 0; Introduced = $false; CallsDay = ""; Calls = 0 }
 $saved = Read-JsonFile $StatePath
 if ($saved) { foreach ($p in $saved.PSObject.Properties) { $state[$p.Name] = $p.Value } }
 # Keys only the old build used
-foreach ($k in @('MailSeen', 'MailPrimed', 'FyiQueue', 'FyiSlot', 'EveningDay', 'TodoDay')) { $state.Remove($k) }
-$state.LastMid = [long]$state.LastMid
+foreach ($k in @('MailSeen', 'MailPrimed', 'FyiQueue', 'FyiSlot', 'EveningDay', 'TodoDay', 'LastMid', 'ChatPin', 'ChatRect')) { $state.Remove($k) }
 $state.Posted  = @($state.Posted)
 function Save-State { Write-JsonFile $StatePath $state }
 
@@ -66,6 +67,24 @@ function Format-Time([datetime]$T) {
     if ($T.Date -eq (Get-Date).Date) { return $T.ToString("h:mm tt", $Inv) }
     return $T.ToString("ddd MMM d, h:mm tt", $Inv)
 }
+# Plain-language version of an error for the chat. The log keeps the raw text.
+function Get-PlainError([string]$Msg) {
+    $m = ([string]$Msg -replace '^\s*Claude error:\s*', '').Trim()
+    if ($m -match '(?i)oauth|failed to authenticate|not logged in|/login') { return "Claude's sign-in expired. In a terminal, run claude and then /login." }
+    if ($m -match '(?i)timed out') { return "Claude took too long to answer." }
+    if ($m -match '(?i)cli not found') { return "I can't find Claude on this PC." }
+    if ($m -match '(?i)returned no json|invalid json|primitive') { return "Claude's answer wasn't in a form I could read." }
+    if ($m.Length -gt 220) { $m = $m.Substring(0, 220) + "..." }
+    return $m
+}
+# Windows pop-up from the tray icon (the server's timer shows it). Teams does not notify for messages you post to yourself.
+function Send-Toast([string]$Text) {
+    try {
+        if ($Config.ToastAlerts -eq $false -or -not $sync.SecretaryToasts) { return }
+        $t = ($Text -replace '\s+', ' ').Trim()
+        if ($t) { $sync.SecretaryToasts.Enqueue($t) }
+    } catch { }
+}
 function Set-Status([string]$Text, [bool]$Alert = $false) {
     $sync.SecretaryStatus = $Text
     $sync.SecretaryAlert  = if ($Alert) { $Text } else { $null }
@@ -80,10 +99,6 @@ function Register-AskKind([string]$Kind, [scriptblock]$Answer, [scriptblock]$Exp
 function Set-Ask([string]$Kind, $Data, [int]$Minutes = 30) {
     if ($script:Ask) { Close-Ask "replaced" }
     $script:Ask = @{ Kind = $Kind; Data = $Data; Until = (Get-Date).AddMinutes($Minutes) }
-}
-function Get-Ask([string]$Kind) {
-    if ($script:Ask -and $script:Ask.Kind -eq $Kind) { return $script:Ask.Data }
-    return $null
 }
 function Clear-Ask { $script:Ask = $null }
 # Runs the kind's expiry step (for example, file unfiled notes under General), then clears the slot

@@ -64,11 +64,25 @@ function Add-TodoItems($Items, [string]$DefaultParent = "") {
     return $out
 }
 
+# "start the paper and add a sub item under it to pick a journal" / "X with sub-items: a, b, c" -> main to-do plus sub-items. No model call.
+function Split-TodoSubitems([string]$Text) {
+    $t = $Text.Trim(); $main = $t; $subs = @()
+    if ($t -match '^(?i)(.+?)[,;]?\s+(?:and\s+)?(?:then\s+)?(?:also\s+)?add\s+(?:a\s+|an\s+|one\s+|another\s+)?sub[- ]?(?:item|task)s?\s*(?:underneath|under|below|beneath)?\s*(?:it|that|this)?\s*(?:to|:|-)?\s*(.+)$') {
+        $main = $Matches[1]; $subs = @($Matches[2] -split '\s*;\s*')
+    } elseif ($t -match '^(?i)(.+?)[,;]?\s+(?:with|plus)\s+(?:the\s+)?sub[- ]?(?:item|task)s?\s*:?\s*(.+)$') {
+        $main = $Matches[1]; $subs = @($Matches[2] -split '\s*(?:;|,|\band\b)\s*')
+    }
+    if (-not $subs.Count) { return @{ main = $t; subs = @() } }   # plain text stays exactly as typed
+    $up = { param($x) $x = ($x.Trim() -replace '^(?i)to\s+', '').Trim(' ', '.'); if ($x.Length) { $x.Substring(0, 1).ToUpper() + $x.Substring(1) } else { $x } }
+    return @{ main = (& $up $main); subs = @($subs | ForEach-Object { & $up $_ } | Where-Object { $_ }) }
+}
+
 function Complete-TodoItems($Texts) {
     $todos = Get-Todos
     $done = @()
     foreach ($t in @($Texts | Where-Object { $_ })) {
         $want = ([string]$t).Trim()
+        $m = Resolve-TodoText $want $todos; if ($m) { $want = $m }
         foreach ($top in $todos) {
             if (-not $top.checked -and ([string]$top.text) -ieq $want) { $top.checked = $true; $done += [string]$top.text; break }
             $kid = @($top.children | Where-Object { $_ -and -not $_.checked -and ([string]$_.text) -ieq $want }) | Select-Object -First 1
@@ -169,11 +183,48 @@ function Update-Todos([scriptblock]$Fn) {
     if ($hits) { Save-Todos $todos }
     return $hits
 }
-# set_due from the router: change the due date of existing open to-dos, matched by exact text
+# The model copies to-do text from the list it was shown, but not always letter for letter. Map its wording to one open to-do:
+# exact (ignoring case, punctuation and a trailing "(due ...)"), else the single clearly best word-overlap match. $null when nothing fits or two fit equally.
+$script:TodoStop = @('the','a','an','to','for','of','and','on','in','with','my','todo','task','update','submit','resubmit','submission')
+function Get-TodoWords([string]$T) {
+    $t = ([string]$T).ToLowerInvariant() -replace '\s*\((?:due|overdue)[^)]*\)\s*$', '' -replace '[^a-z0-9 ]', ' '
+    return @($t -split '\s+' | Where-Object { $_ })
+}
+function Resolve-TodoText([string]$Want, $Todos) {
+    $w = Get-TodoWords $Want
+    if (-not $w.Count) { return $null }
+    $cands = @()
+    foreach ($top in $Todos) {
+        if (-not $top.checked) { $cands += $top }
+        foreach ($k in @($top.children | Where-Object { $_ -and -not $_.checked })) { $cands += $k }
+    }
+    foreach ($c in $cands) { if (([string]$c.text) -ieq $Want.Trim()) { return [string]$c.text } }
+    foreach ($c in $cands) { if ((Get-TodoWords ([string]$c.text)) -join ' ' -eq ($w -join ' ')) { return [string]$c.text } }
+    $wk = @($w | Where-Object { $script:TodoStop -notcontains $_ })
+    if (-not $wk) { $wk = $w }
+    if ($wk.Count -lt 2) { return $null }   # one shared word is not enough to guess
+    $scored = @()
+    foreach ($c in $cands) {
+        $ck = @((Get-TodoWords ([string]$c.text)) | Where-Object { $script:TodoStop -notcontains $_ })
+        if (-not $ck) { continue }
+        $inter = @($wk | Where-Object { $ck -contains $_ }).Count
+        $union = @($wk + $ck | Select-Object -Unique).Count
+        $cover = $inter / [double]$wk.Count
+        $score = $inter / [double]$union
+        if ($cover -ge 0.75 -and $score -ge 0.4) { $scored += [pscustomobject]@{ text = [string]$c.text; score = $score } }
+    }
+    $scored = @($scored | Sort-Object score -Descending)
+    if ($scored.Count -eq 1 -or ($scored.Count -gt 1 -and $scored[0].score -gt $scored[1].score)) { return $scored[0].text }
+    return $null
+}
+# set_due from the router: change the due date of existing open to-dos (wording matched loosely, see Resolve-TodoText)
+$script:LastDueMisses = @()
 function Set-TodoDueByText($Items) {
-    $done = @()
+    $done = @(); $script:LastDueMisses = @()
     foreach ($it in @($Items | Where-Object { $_ -and [string]$_.text })) {
-        $want = ([string]$it.text).Trim(); $due = Resolve-TodoDueField $it; $st = @{ found = $false }
+        $want = Resolve-TodoText ([string]$it.text) (Get-Todos)
+        if (-not $want) { $script:LastDueMisses += ([string]$it.text).Trim(); continue }
+        $due = Resolve-TodoDueField $it; $st = @{ found = $false }
         $hit = @(Update-Todos {
             param($x)
             if ($st.found -or $x.checked -or ([string]$x.text) -ine $want) { return $false }
@@ -198,8 +249,8 @@ function Request-TodoDue {
     $script:LastTodoAdds = @()
     if (-not $items.Count) { return "" }
     Set-Ask 'todo_due' @{ Items = $items }
-    if ($items.Count -eq 1) { return "When do you want to get this done? Today, tomorrow, Friday, next week, a date, or no date." }
-    return "When do you want to get these done? Today, tomorrow, Friday, next week, a date, or no date. One answer covers all, or go item by item (""1 today, 2 next week"")."
+    if ($items.Count -eq 1) { return "When do you want to get this done?" }
+    return "When do you want to get these done?"
 }
 Register-AskKind 'todo_due' {
     param($p, [string]$Text)

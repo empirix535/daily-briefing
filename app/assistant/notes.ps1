@@ -26,7 +26,7 @@ function Start-Notes {
     Save-State
     [System.IO.File]::WriteAllText($NotesBufferPath, "", $Utf8)
     $for = if ($m) { " for ""$($m.Subject)""" } else { "" }
-    Send-Chat "Taking notes$for. Type away; I'll stay quiet. Type end notes when you're done (or cancel notes to discard)."
+    Send-Chat "Taking notes$for."
 }
 function Add-NoteLine([string]$Text) {
     [System.IO.File]::AppendAllText($NotesBufferPath, ("[{0}] {1}`n" -f (Get-Date).ToString("HH:mm"), $Text), $Utf8)
@@ -125,7 +125,7 @@ function Request-NoteFiling([string]$Entry, [string]$Hint, [string]$Guess, [bool
         $name = ConvertTo-NoteName $Hint
         if (-not $name) { $name = "General" }
         Set-Ask 'note_filing' @{ Entry = $Entry; Page = $name; IsNew = $true }
-        return "There's no note page called ""$name"". Reply yes to create it and file this there, or give another page name, or say general."
+        return "There's no note page called ""$name"". Create it and file this there?"
     }
     $g = if ($Guess) { $Guess } else { "General" }
     $found = Find-NotePage $g
@@ -134,9 +134,8 @@ function Request-NoteFiling([string]$Entry, [string]$Hint, [string]$Guess, [bool
     else { $g = ConvertTo-NoteName $g; if (-not $g -or $g -ieq 'General') { $g = "General" } else { $isNew = $true } }
     if ($g -eq "General" -and -not $AskGeneral) { Add-NoteEntry "General" $Entry; return "Saved to General in your Notes tab." }
     Set-Ask 'note_filing' @{ Entry = $Entry; Page = $g; IsNew = $isNew }
-    $tail = "Reply yes, or give another page name, or say general. (new <name> starts a new page.)"
-    if ($isNew) { return "My guess: a new page called ""$g"". $tail" }
-    return "Where should this go? My guess: ""$g"". $tail"
+    if ($isNew) { return "Start a new page called ""$g"" for this?" }
+    return "File this under ""$g""?"
 }
 Register-AskKind 'note_filing' {
     param($p, [string]$Text)
@@ -180,7 +179,7 @@ function Show-NotePage([string]$Name, [bool]$Full) {
         Send-Chat ("$page notes:`n" + $t); return
     }
     $sum = Invoke-SecClaude ("Summarize this note page for $U in plain text with no markdown: 5 to 10 short lines grouped by topic, newest items first. Keep names, numbers and dates exact.`n`nPAGE ""$page""`n$t") -Plain
-    Send-Chat ("$page notes, summarized ($(@($t -split '\s+').Count) words). Say ""show full $page"" for everything.`n" + $sum.Trim())
+    Send-Chat ("$page notes, summarized ($(@($t -split '\s+').Count) words).`n" + $sum.Trim())
 }
 
 # An entry is a paragraph, except that a "## " entry keeps its summary paragraph and its KEY POINTS / DECISIONS / ACTION ITEMS paragraphs.
@@ -271,7 +270,7 @@ $orig
     if ($miss.Count) { $sm += "`nNumbers or dates from the original that I can't find in the new version: " + (($miss | Select-Object -First 12) -join ', ') + "." }
     if ($heads.Count) { $sm += "`nHeadings: " + (($heads | ForEach-Object { $_.Substring(2).Trim() }) -join ', ') + "." }
     Set-Ask 'note_edit' @{ Page = $page; Orig = $orig; New = $new }
-    Send-Chat ($sm + "`nReply yes to apply it (I save the previous version first) or no to leave it.")
+    Send-Chat ($sm + "`nApply it?")
 }
 Register-AskKind 'note_edit' {
     param($p, [string]$Text)
@@ -281,7 +280,7 @@ Register-AskKind 'note_edit' {
     if (-not $yes -and -not $no) { return $false }
     Clear-Ask
     if ($no) { Send-Chat "OK, your notes are unchanged."; return $true }
-    if ((Read-NotePage $p.Page) -cne [string]$p.Orig) { Send-Chat "The $($p.Page) page changed after I proposed that, so I left it. Ask me to tidy it again."; return $true }
+    if ((Read-NotePage $p.Page) -cne [string]$p.Orig) { Send-Chat "The $($p.Page) page changed after I proposed that, so I left it."; return $true }
     $b = Backup-NotePage $p.Page
     Write-NotePage $p.Page ([string]$p.New)
     Send-Chat ("Done." + $(if ($b) { " Previous version saved as: $b." } else { "" }))

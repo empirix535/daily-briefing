@@ -9,6 +9,13 @@
 # your reply, checked at the noon and 4 PM roundups).
 
 $FyiTimes = @('12:00', '16:00')
+$FyiMaxHours = 24   # FYI items older than this are dropped from the roundup
+# One roundup line per email chain: same subject without Re:/Fw: prefixes (falls back to the thread key)
+function Get-FyiGroup($i) {
+    $sub = ([string]$i.subject).ToLower() -replace '^\s*((re|fw|fwd)\s*:\s*)+', '' -replace '\s+', ' '
+    if ($sub.Trim()) { return 's:' + $sub.Trim() }
+    return 'k:' + [string]$i.key
+}
 
 function Get-SeenMail {
     if ($state.SeenMail -is [hashtable]) { return $state.SeenMail }
@@ -22,9 +29,14 @@ function Get-SeenMail {
 function Format-MailLine($T) {
     $due = ""
     if ([string]$T.deadline -match '^\d{4}-\d{2}-\d{2}') { try { $due = " (by " + ([datetime][string]$T.deadline).ToString('ddd MMM d', $Inv) + ")" } catch { } }
-    $doc = if ([string]$T.doc) { " Doc: $($T.doc)" } else { "" }
+    # Only attachment or online-document web links are shown. Connector-internal ids such as mail:///messages/... are dropped, and message links are never used.
+    $href = if ([string]$T.doc -match '^https?://\S+$') { [string]$T.doc } else { "" }
+    $doc = if ($href) { " Doc: $href" } else { "" }
     return ([string]$T.line).Trim() + $due + $doc
 }
+
+# Lines saved before the link fix can carry "Doc: mail:///..." text. Drop any Doc link that is not a web address.
+function Remove-BadDoc([string]$Line) { return ($Line -replace '\s*Doc:\s*(?!https?://)\S+', '').Trim() }
 
 function Get-Greeting { if ((Get-Date).Hour -lt 12) { return "Good morning" } else { return "Good afternoon" } }
 
@@ -33,12 +45,12 @@ function Get-ScanPrompt([datetime]$Now, [datetime]$Since, $SeenSigs) {
     return @"
 You are checking $U's Outlook for $U, $($Config.UserDescription). Use read tools only. Now: $($Now.ToString("dddd, MMMM d, yyyy h:mm tt", $Inv)) ($U's local time, UTC$(Get-UtcOffsetText $Now)).
 
-STEP 1. Call get_granted_scopes. If it fails, return {"health": {"ok": false, "error": "the error text, including any AADSTS code", "scopes": []}, "threads": [], "meetings": []} and stop. If it works, list the granted scopes in health.scopes.
+STEP 1. Do not call get_granted_scopes and set health.scopes to []. The searches below are the health check: if outlook_email_search or outlook_calendar_search fails, return {"health": {"ok": false, "error": "the error text, starting with the exact name of the tool that failed, and any AADSTS code", "scopes": []}, "threads": [], "meetings": []} and stop.
 
 STEP 2. MAIL. Use outlook_email_search for messages received in the inbox since $($Since.ToString('yyyy-MM-ddTHH:mm', $Inv)) (local time). Ignore messages $U sent, and junk and deleted items. Group them by conversation. Already handled (key|latest); skip these without opening them:
 $seenText
 For each remaining conversation that is not clearly Noise from its preview, open it with read_resource so you know the whole thread before you write about it.
-Each thread object: {"key": "the conversation or thread id from the search", "latest": "received time of the newest message, YYYY-MM-DDTHH:MM local", "from": "sender first name", "subject": "", "category": "Requires Response|FYI|Noise", "resolved": false, "line": "", "deadline": "YYYY-MM-DD or empty", "doc": "link to the document or attachment page the message refers to, else empty", "link": "web link to the message or thread, else empty", "direct": true}
+Each thread object: {"key": "the conversation or thread id from the search", "latest": "received time of the newest message, YYYY-MM-DDTHH:MM local", "from": "sender first name", "subject": "", "category": "Requires Response|FYI|Noise", "resolved": false, "line": "", "deadline": "YYYY-MM-DD or empty", "doc": "https web link to the document or attachment page the message refers to, else empty. Never a mail:// or other non-https id", "link": "web link to the message or thread, else empty", "direct": true}
 Category:
 - "Requires Response": $U needs to reply, decide, review, approve, submit, or act.
 - "FYI": relevant work or personal information with no action needed.
@@ -70,8 +82,16 @@ function Invoke-MailScan([datetime]$Now, [string]$Mode) {
 
     $res = $null; $why = ""
     try {
-        $res = ConvertFrom-ModelJson (Invoke-SecConnector (Get-ScanPrompt $Now $since.AddMinutes(-5) $sigs))
-        if (-not $res.health -or -not [bool]$res.health.ok) { $why = [string]$res.health.error; if (-not $why) { $why = "the connector did not confirm its scopes" } }
+        $sp = Get-ScanPrompt $Now $since.AddMinutes(-5) $sigs
+        $raw = Invoke-SecConnector $sp
+        try { $res = ConvertFrom-ModelJson $raw }
+        catch {
+            # The model sometimes answers in words ("Already handled...") instead of the JSON object. Ask once more before calling it a failure.
+            Write-Log "Scan reply was not JSON, asking again: $(([string]$raw).Substring(0, [math]::Min(120, ([string]$raw).Length)) -replace '\s+', ' ')" "WARN"
+            $raw = Invoke-SecConnector ($sp + "`n`nYour last reply was not the JSON object. Reply with the JSON object only, starting with { and ending with }, and no other text. If nothing is new, use an empty threads list.")
+            $res = ConvertFrom-ModelJson $raw
+        }
+        if (-not $res.health -or -not [bool]$res.health.ok) { $why = [string]$res.health.error; if (-not $why) { $why = "the connector did not answer" } }
     } catch { $why = $_.Exception.Message }
 
     if ($why) {
@@ -83,7 +103,9 @@ function Invoke-MailScan([datetime]$Now, [string]$Mode) {
         if ($greetFail) { $state.GreetFailDay = $today }
         Save-State
         if ($first -or $greetFail -or $Mode -eq 'manual') {
-            Send-Chat ($(if ($Mode -eq 'greeting') { "$(Get-Greeting). " } else { "" }) + "The email connector check failed: $why`nI'll retry every 15 minutes and stay quiet until it works. Reminders and to-dos still run.")
+            Send-Chat ($(if ($Mode -eq 'greeting') { "$(Get-Greeting). " } else { "" }) + "I couldn't check your email: $(Get-PlainError $why)`nI'll retry every 15 minutes and stay quiet until it works. Reminders and to-dos still run.")
+            # The to-do part of the morning brief does not need the connector, so it goes out even when the email check fails.
+            if ($greetFail) { try { Send-Chat (Get-TodoAgenda $Now.Date 'week') } catch { Write-Log "To-do agenda failed: $($_.Exception.Message)" "WARN" } }
         }
         return $false
     }
@@ -112,7 +134,12 @@ function Invoke-MailScan([datetime]$Now, [string]$Mode) {
     if ($seen.Count -gt 500) { foreach ($k in @($seen.Keys | Sort-Object { $seen[$_] } | Select-Object -First ($seen.Count - 400))) { $seen.Remove($k) } }
     if ($fyi.Count) {
         $q = @($state.FyiItems | Where-Object { $_ })
-        foreach ($t in $fyi) { $q = @($q | Where-Object { [string]$_.key -ne [string]$t.key }) + [pscustomobject]@{ key = [string]$t.key; line = (Format-MailLine $t); from = [string]$t.from; subject = [string]$t.subject; link = [string]$t.link } }
+        foreach ($t in $fyi) {
+            $at = $Now; try { if ([string]$t.latest) { $at = [datetime]::Parse([string]$t.latest, $Inv) } } catch { }
+            $new = [pscustomobject]@{ key = [string]$t.key; line = (Format-MailLine $t); from = [string]$t.from; subject = [string]$t.subject; link = [string]$t.link; at = $at.ToString('s') }
+            $g = Get-FyiGroup $new
+            $q = @($q | Where-Object { [string]$_.key -ne [string]$t.key -and (Get-FyiGroup $_) -ne $g }) + $new   # a newer message in the same chain replaces the older line
+        }
         $state.FyiItems = $q
     }
     Save-State
@@ -154,7 +181,8 @@ function Send-MailAlert($Need, [string]$Head) {
         $store += [pscustomobject]@{ n = $n; key = [string]$t.key; from = [string]$t.from; subject = [string]$t.subject; link = [string]$t.link }
     }
     $state.LastAlert = $store; Save-State
-    Send-Chat ($Head + "`n" + ($lines -join "`n") + "`n" + $(if ($n -gt 1) { "Ask what 1 wants, or for a play by play on 2." } else { "Ask what 1 wants, or for a play by play." }))
+    Send-Toast ("$n email$(if ($n -ne 1) { 's' }) need$(if ($n -eq 1) { 's' }) you: " + (Remove-BadDoc ([string]@($Need)[0].line)))
+    Send-Chat ($Head + "`n" + ($lines -join "`n"))
 }
 
 # Wall-clock scan for the slots :00, :15, :30, :45 during working hours. The scan starts one minute early (:14, :29, :44, :59)
@@ -175,16 +203,22 @@ function Invoke-MailWatch([datetime]$Now) {
 function Send-FyiBatch([switch]$Asked) {
     $q = @($state.FyiItems | Where-Object { $_ })
     $state.FyiItems = @(); Save-State
+    # Drop anything older than 24 hours (items queued before this existed carry no time and are kept), then one line per chain, newest wins
+    $cut = (Get-Date).AddHours(-$FyiMaxHours)
+    $q = @($q | Where-Object { -not $_.at -or ([datetime]::Parse([string]$_.at, $Inv) -ge $cut) })
+    $seenG = @{}; $keep = @()
+    foreach ($i in @($q | Sort-Object { if ($_.at) { [string]$_.at } else { '' } } -Descending)) { $g = Get-FyiGroup $i; if (-not $seenG.ContainsKey($g)) { $seenG[$g] = 1; $keep += $i } }
+    $q = @($keep | Sort-Object { if ($_.at) { [string]$_.at } else { '' } })
     if (-not $q.Count) { if ($Asked) { Send-Chat "No FYI email waiting." }; return }
     # Numbered like an alert, so "what does 2 say" and "make a todo from 3" work on the roundup
     $n = 0; $store = @(); $lines = @()
     foreach ($i in $q) {
         $n++
-        $lines += "$n. " + [string]$i.line
+        $lines += "$n. " + (Remove-BadDoc ([string]$i.line))
         $store += [pscustomobject]@{ n = $n; key = [string]$i.key; from = [string]$i.from; subject = [string]$i.subject; link = [string]$i.link }
     }
     $state.LastAlert = $store; $script:RoundupBase = $n; Save-State
-    Send-Chat ("FYI email since the last roundup:`n`n" + ($lines -join "`n`n") + "`n`nAsk about any number, or say ""make a todo from $(if ($n -gt 1) { '2' } else { '1' })"".")
+    Send-Chat ("FYI email since the last roundup:`n`n" + ($lines -join "`n`n"))
 }
 function Invoke-FyiBatch([datetime]$Now) {
     if (-not (@($Config.SecretaryDays) -contains $Now.DayOfWeek.ToString().Substring(0, 3))) { return }
@@ -256,7 +290,7 @@ function Send-ReplyCheck([datetime]$Now = (Get-Date), [switch]$Asked) {
     if (-not (Test-CallBudget)) { if ($Asked) { Send-Chat "I've hit today's Claude call limit, so I can't check your replies until tomorrow." }; return }
     $done = $null
     try { $done = @(Get-RepliedKeys $c $Now) }
-    catch { Write-Log "Reply check could not run: $($_.Exception.Message)" "WARN"; if ($Asked) { Send-Chat "I couldn't check your sent mail: $($_.Exception.Message)" }; return }
+    catch { Write-Log "Reply check could not run: $($_.Exception.Message)" "WARN"; if ($Asked) { Send-Chat "I couldn't check your sent mail: $(Get-PlainError $_.Exception.Message)" }; return }
     foreach ($k in $done) { Remove-ReplyTrack $k }
     $open = @($c | Where-Object { $done -notcontains [string]$_.key })
     if (-not $open.Count) { if ($Asked) { Send-Chat "You have answered everything I was watching." }; return }
@@ -264,14 +298,15 @@ function Send-ReplyCheck([datetime]$Now = (Get-Date), [switch]$Asked) {
     $n = $base; $store = @($state.LastAlert | Where-Object { $_ -and $base -gt 0 -and [int]$_.n -le $base }); $lines = @()
     foreach ($r in $open) {
         $n++
-        $lines += "$n. $($r.line) (flagged $(([datetime][string]$r.flagged).ToString('ddd h:mm tt', $Inv)))"
+        $lines += "$n. $(Remove-BadDoc ([string]$r.line)) (flagged $(([datetime][string]$r.flagged).ToString('ddd h:mm tt', $Inv)))"
         $store += [pscustomobject]@{ n = $n; key = [string]$r.key; from = [string]$r.from; subject = [string]$r.subject; link = [string]$r.link }
         $rec = Get-ReplyTrack | Where-Object { [string]$_.key -eq [string]$r.key } | Select-Object -First 1
         if ($rec) { $rec.asks = [int]$rec.asks + 1; $rec.lastAsk = $Now.ToString('s') }
     }
     $state.LastAlert = $store; Save-State
+    Send-Toast ("Still waiting on your reply: " + (Remove-BadDoc ([string]@($open)[0].line)))
     Send-Chat ("You haven't replied to $(if ($n -eq 1) { 'this email' } else { 'these emails' }) yet:`n" + ($lines -join "`n") +
-        "`nAre you planning to reply? Say ""reply to $($base + 1) by Friday"" to be reminded, or ""skip $($base + 1)"" (or ""skip all"") and I will stop asking.")
+        "`nAre you planning to reply?")
 }
 
 # "skip 2", "skip 1 and 3", "skip all": stop asking about numbered items from the latest list
@@ -314,7 +349,7 @@ Answer with one JSON object and nothing else: {"reply": "plain text for $U", "to
 "@
     $res = $null
     try { $res = ConvertFrom-ModelJson (Invoke-SecConnector $prompt) }
-    catch { Write-Log "Mail request failed: $($_.Exception.Message)" "WARN"; Send-Chat "I couldn't read your email: $($_.Exception.Message)"; return }
+    catch { Write-Log "Mail request failed: $($_.Exception.Message)" "WARN"; Send-Chat "I couldn't read your email: $(Get-PlainError $_.Exception.Message)"; return }
     $out = @([string]$res.reply)
     $items = @($res.todos | Where-Object { $_ -and $_.text } | ForEach-Object {
         @{ text = [string]$_.text; due_said = [string]$_.due_said; due = [string]$_.due; mailLink = [string]$_.link } })
@@ -328,7 +363,7 @@ Answer with one JSON object and nothing else: {"reply": "plain text for $U", "to
         if ($added) { $out += "Added to your to-do list:`n" + (($added | ForEach-Object { "- $_" }) -join "`n"); $q = Request-TodoDue; if ($q) { $out += $q } }
     }
     $msg = (@($out | Where-Object { $_ }) -join "`n").Trim()
-    Send-Chat $(if ($msg) { $msg } else { "I couldn't find that thread. Tell me the sender or subject." })
+    Send-Chat $(if ($msg) { $msg } else { "I couldn't find that thread." })
 }
 
 # The alert item a message points at ("from 1", "email 2", "#3"), else $null. Used to attach the email link to a to-do.

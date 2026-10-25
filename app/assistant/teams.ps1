@@ -6,7 +6,7 @@ function Get-TeamsTarget {
     return @($list | Where-Object { $_.type -eq 'page' -and $_.url -match 'teams\.cloud\.microsoft|teams\.microsoft\.com|login\.microsoftonline' }) | Select-Object -First 1
 }
 
-# Hide or show the assistant's Chrome window (Win32). Only touches the Chrome started with the assistant's profile.
+# Hide or show the Teams Chrome window (Win32). Only touches the Chrome started with the assistant's profile.
 Add-Type -Language CSharp -TypeDefinition @"
 using System; using System.Collections.Generic; using System.Runtime.InteropServices; using System.Text;
 public static class SecWin {
@@ -19,15 +19,6 @@ public static class SecWin {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
-    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
-    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
-    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
-    public static bool Minimized(IntPtr h) { return IsIconic(h); }
-    public static int[] Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return new int[] { r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top }; }
-    // Move, size, and keep above other windows (or release); never takes focus
-    public static void Place(IntPtr h, int x, int y, int w, int ht, bool top) { SetWindowPos(h, new IntPtr(top ? -1 : -2), x, y, w, ht, 0x10 | 0x40); }
-    public static void Top(IntPtr h, bool top) { SetWindowPos(h, new IntPtr(top ? -1 : -2), 0, 0, 0, 0, 0x1 | 0x2 | 0x10); }
     public static IntPtr[] Find(uint pid) {
         var list = new List<IntPtr>();
         EnumWindows(delegate(IntPtr h, IntPtr l) {
@@ -58,43 +49,6 @@ function Set-TeamsWindow([bool]$Show) {
         $vis = [SecWin]::IsWindowVisible($h)
         if ($Show -and -not $vis) { [void][SecWin]::ShowWindow($h, 9); [void][SecWin]::SetForegroundWindow($h) }
         elseif (-not $Show -and $vis) { [void][SecWin]::ShowWindow($h, 0) }
-    }
-}
-
-# Pinned chat window: the same Chrome window, small, on top of other windows, and back where you left it.
-# Size and place it once by hand; the assistant remembers it (state.ChatRect) and restores it after a restart.
-try { Add-Type -AssemblyName System.Windows.Forms } catch {}
-$script:PinHandle = [IntPtr]::Zero
-$script:PinForce  = $false
-function Get-ChatRect {
-    $screens = @([System.Windows.Forms.Screen]::AllScreens)
-    $r = @(([string]$state.ChatRect).Split(',') | Where-Object { $_ -match '^-?\d+$' } | ForEach-Object { [int]$_ })
-    if ($r.Count -eq 4 -and $r[2] -gt 250 -and $r[3] -gt 250) {
-        $box = New-Object System.Drawing.Rectangle($r[0], $r[1], $r[2], $r[3])
-        if (@($screens | Where-Object { $_.WorkingArea.IntersectsWith($box) }).Count) { return $r }
-    }
-    $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $w = 460; $h = [math]::Min(760, $wa.Height - 80)
-    return @(($wa.Right - $w - 12), ($wa.Top + 40), $w, $h)
-}
-function Set-TeamsPinned([bool]$On) {
-    $procId = Get-TeamsChromePid
-    if (-not $procId) { return }
-    foreach ($h in [SecWin]::Find($procId)) {
-        if ($On) {
-            if (-not $script:PinHandle.Equals($h) -or $script:PinForce) {
-                $r = Get-ChatRect
-                [void][SecWin]::ShowWindow($h, 9)
-                [SecWin]::Place($h, $r[0], $r[1], $r[2], $r[3], $true)
-                $script:PinHandle = $h; $script:PinForce = $false
-            } elseif ([SecWin]::IsWindowVisible($h) -and -not [SecWin]::Minimized($h)) {
-                $r = [SecWin]::Rect($h)
-                $txt = $r -join ','
-                if ($r[2] -gt 250 -and $r[3] -gt 250 -and $txt -ne [string]$state.ChatRect) { $state.ChatRect = $txt; Save-State }
-            }
-        } elseif ($script:PinHandle.Equals($h)) {
-            [SecWin]::Top($h, $false); $script:PinHandle = [IntPtr]::Zero
-        }
     }
 }
 
@@ -177,13 +131,88 @@ $NavJs = @'
 '@
 
 function Get-Normalized([string]$Text) {
-    $t = $Text.Replace($Tag, "") -replace '\s+', ' '
-    $t = ($t.Trim() -replace '^(?i)assistant:\s*', '').ToLowerInvariant()
+    $t = $Text.Replace($Tag, ""); foreach ($o in $OldTags) { $t = $t.Replace($o, "") }; $t = $t -replace '\s+', ' '
+    $t = ($t.Trim() -replace ('^(?i)(?:assistant|' + [regex]::Escape($BotName) + '):\s*'), '').ToLowerInvariant()
     if ($t.Length -gt 80) { $t = $t.Substring(0, 80) }
     return $t
 }
 
-# Post into the notes-to-self chat as "<robot> **Assistant:** text". Refuses if the open chat is not the self-chat.
+# Turn bare http(s) links in already HTML-encoded text into anchors. Long links (SharePoint and the like) show as "open link".
+function ConvertTo-HtmlLinks([string]$Encoded) {
+    return [regex]::Replace($Encoded, 'https?://[^\s<>"]+', {
+        param($m)
+        $u = $m.Value; $tail = ""
+        while ($u -match '[.,;:!?)\]]$' -and $u -notmatch '&amp;$') { $tail = $u.Substring($u.Length - 1) + $tail; $u = $u.Substring(0, $u.Length - 1) }
+        $txt = if ($u.Length -gt 60) { "open link" } else { $u }
+        "<a href=`"$u`">$txt</a>$tail"
+    })
+}
+# Type the custom emoji shortcode (for example ":otis:") into the empty compose box with real key presses so Teams converts it.
+# Returns $true when the box now holds an emoji picture and no shortcode text. Otherwise clears the box and returns $false.
+function Start-CustomEmoji($Target, [string]$Code) {
+    $prep = @"
+(() => {
+  if (!/\(You\)/.test(document.title)) return 'NOT_SELF_CHAT';
+  const b = document.querySelector('[data-tid="ckeditor"][contenteditable="true"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+  if (!b) return 'NO_COMPOSE_BOX';
+  b.focus();
+  const ed = b.ckeditorInstance;
+  if (ed && ed.setData) ed.setData(''); else { document.execCommand('selectAll'); document.execCommand('delete'); }
+  b.focus();
+  return 'READY';
+})()
+"@
+    if ((Invoke-TeamsJs $Target $prep) -ne 'READY') { return $false }
+    # The check accepts any emoji element in the compose box (picture or span) as long as the shortcode text is gone.
+    # On failure it returns the start of the box's HTML so the log shows what Teams actually built.
+    $chk = @"
+(() => {
+  const b = document.querySelector('[data-tid="ckeditor"][contenteditable="true"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+  if (!b) return 'NO|no box';
+  const gone = !b.innerText.includes($(ConvertTo-Json -InputObject $Code));
+  const has = b.querySelectorAll('img, [itemtype*="Emoji"], [class*="emoji" i], [data-tid*="emoji" i]').length >= 1;
+  if (gone && has) return 'OK|';
+  return 'NO|' + b.innerHTML.slice(0, 500);
+})()
+"@
+    $clear = @"
+(() => {
+  const b = document.querySelector('[data-tid="ckeditor"][contenteditable="true"]') || document.querySelector('[role="textbox"][contenteditable="true"]');
+  if (!b) return 'NO';
+  const ed = b.ckeditorInstance;
+  if (ed && ed.setData) ed.setData(''); else { document.execCommand('selectAll'); document.execCommand('delete'); }
+  b.focus();
+  return 'CLEARED';
+})()
+"@
+    # Attempt 1 types the whole shortcode ":otis:". Attempt 2 types ":otis" and takes the first suggestion with Tab.
+    for ($try = 1; $try -le 2; $try++) {
+        $typed = if ($try -eq 1) { $Code } else { $Code.TrimEnd(':') }
+        $calls = New-Object System.Collections.ArrayList
+        # The Teams window is kept hidden, so make the page behave as if it had focus while the keys go in.
+        [void]$calls.Add(@{ Method = 'Emulation.setFocusEmulationEnabled'; Params = @{ enabled = $true } })
+        foreach ($ch in $typed.ToCharArray()) {
+            [void]$calls.Add(@{ Method = 'Input.dispatchKeyEvent'; Params = @{ type = 'keyDown'; key = [string]$ch; text = [string]$ch } })
+            [void]$calls.Add(@{ Method = 'Input.dispatchKeyEvent'; Params = @{ type = 'keyUp'; key = [string]$ch } })
+            [void]$calls.Add(@{ Sleep = 60 })
+        }
+        [void]$calls.Add(@{ Sleep = 900 })
+        if ($try -eq 2) {
+            [void]$calls.Add(@{ Method = 'Input.dispatchKeyEvent'; Params = @{ type = 'rawKeyDown'; key = 'Tab'; code = 'Tab'; windowsVirtualKeyCode = 9 } })
+            [void]$calls.Add(@{ Method = 'Input.dispatchKeyEvent'; Params = @{ type = 'keyUp'; key = 'Tab'; code = 'Tab'; windowsVirtualKeyCode = 9 } })
+            [void]$calls.Add(@{ Sleep = 700 })
+        }
+        [void](Invoke-Cdp $Target @($calls))
+        $r = [string](Invoke-TeamsJs $Target $chk)
+        if ($r.StartsWith('OK')) { return $true }
+        Write-Log "Custom emoji attempt $try left this in the compose box: $($r -replace '\s+', ' ')" "WARN"
+        [void](Invoke-TeamsJs $Target $clear)
+        Start-Sleep -Milliseconds 300
+    }
+    return $false
+}
+
+# Post into the notes-to-self chat as "<octopus> **Assistant:** text". Refuses if the open chat is not the self-chat.
 # Formatting goes in by a synthetic paste of HTML (Teams keeps bold); plain typing is the fallback.
 function Send-Chat([string]$Text, [string]$LinkUrl = "", [string]$LinkText = "") {
     # Long messages go out in parts at line breaks (Teams does not always send a long pasted message on Enter)
@@ -202,12 +231,19 @@ function Send-Chat([string]$Text, [string]$LinkUrl = "", [string]$LinkText = "")
     $tgt = Get-TeamsTarget
     if (-not $tgt) { throw "Teams window not available." }
     if ($Text.Length -gt 3500) { $Text = $Text.Substring(0, 3500) + " ..." }
-    $body = (($Text -replace "`r", "").Split("`n") | ForEach-Object { [System.Net.WebUtility]::HtmlEncode($_) }) -join "<br>"
+    $body = (($Text -replace "`r", "").Split("`n") | ForEach-Object { ConvertTo-HtmlLinks ([System.Net.WebUtility]::HtmlEncode($_)) }) -join "<br>"
     if ($LinkUrl) {
         $lt = if ($LinkText) { $LinkText } else { $LinkUrl }
         $body += "<br><a href=`"$([System.Net.WebUtility]::HtmlEncode($LinkUrl))`">$([System.Net.WebUtility]::HtmlEncode($lt))</a>"
     }
-    $html = "<p>$Tag <b>Assistant:</b> $body</p>"
+    # The marker is the custom emoji when it converts, else the standard emoji.
+    $tagHtml = $Tag
+    $custom = $false
+    if ([string]$Config.BotEmojiCode) {
+        try { $custom = Start-CustomEmoji $tgt ([string]$Config.BotEmojiCode) } catch { Write-Log "Custom emoji failed: $($_.Exception.Message)" "WARN" }
+        if (-not $custom) { Write-Log "Custom emoji $($Config.BotEmojiCode) did not convert; using the standard emoji." "WARN" }
+    }
+    $html = if ($custom) { "<p>&nbsp;<b>${BotName}:</b> $body</p>" } else { "<p>$tagHtml <b>${BotName}:</b> $body</p>" }
     $pasteJs = @"
 (() => {
   if (!/\(You\)/.test(document.title)) return 'NOT_SELF_CHAT';
@@ -215,9 +251,14 @@ function Send-Chat([string]$Text, [string]$LinkUrl = "", [string]$LinkText = "")
   if (!b) return 'NO_COMPOSE_BOX';
   b.focus();
   const html = $(ConvertTo-Json -InputObject $html);
-  const ok = () => (b.innerText.match(/Assistant:/g) || []).length === 1;
+  const ok = () => (b.innerText.match(/$([regex]::Escape($BotName)):/g) || []).length === 1;
   const ed = b.ckeditorInstance;
-  if (ed && ed.setData) { ed.setData(html); if (ok()) return 'PASTED'; }
+  const custom = $(if ($custom) { 'true' } else { 'false' });
+  if (custom && ed && ed.model && ed.data) {
+    try { ed.model.change(() => { ed.model.insertContent(ed.data.toModel(ed.data.processor.toView(html))); }); } catch (e) {}
+    if (ok()) return 'PASTED';
+  }
+  else if (ed && ed.setData) { ed.setData(html); if (ok()) return 'PASTED'; }
   else {
     const dt = new DataTransfer();
     dt.setData('text/html', html);
@@ -234,7 +275,7 @@ function Send-Chat([string]$Text, [string]$LinkUrl = "", [string]$LinkText = "")
     if ($res -ne 'PASTED') {
         # Fallback: type plain text, Shift+Enter between lines
         Write-Log "Formatted paste did not take ($res). Typing plain text." "WARN"
-        $lines = ("$Tag Assistant: $Text" + $(if ($LinkUrl) { "`n$LinkUrl" } else { "" }) -replace "`r", "").Split("`n")
+        $lines = ("$Tag ${BotName}: $Text" + $(if ($LinkUrl) { "`n$LinkUrl" } else { "" }) -replace "`r", "").Split("`n")
         for ($i = 0; $i -lt $lines.Count; $i++) {
             if ($lines[$i]) { [void]$calls.Add(@{ Method = 'Input.insertText'; Params = @{ text = $lines[$i] } }) }
             if ($i -lt $lines.Count - 1) {
@@ -265,6 +306,7 @@ function Send-Chat([string]$Text, [string]$LinkUrl = "", [string]$LinkText = "")
 
 function Test-Ours($m) {
     $t = [string]$m.text; $a = [string]$m.alt
-    if ($t.StartsWith($Tag) -or $a.StartsWith($Tag) -or $a -match '^\s*:?robot') { return $true }
+    foreach ($o in @($Tag) + $OldTags) { if ($t.StartsWith($o) -or $a.StartsWith($o)) { return $true } }
+    if ($a -match '^\s*:?(robot|paperclip|bear|octopus)' -or $a -match ('(?i)^\s*:?otis:?\s*' + [regex]::Escape($BotName) + ':')) { return $true }
     return (@($state.Posted) -contains (Get-Normalized $t))
 }

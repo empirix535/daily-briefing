@@ -1,4 +1,4 @@
-' Daily Briefing fallback launcher (used only if DailyBriefing.exe could not be built).
+' Otis fallback launcher (used only if DailyBriefing.exe could not be built).
 ' 1. Starts classic Outlook minimized if it is not running.
 ' 2. Starts app\server.ps1 hidden (tray icon only) if it is not already running.
 ' 3. Opens the dashboard window, unless run with /background.
@@ -64,7 +64,7 @@ If Not ServerUp() Then
         If ServerUp() Then Exit For
     Next
     If Not ServerUp() Then
-        MsgBox "The Daily Briefing server did not start." & vbCrLf & "Check data\server.log in " & baseDir, vbExclamation, "Daily Briefing"
+        MsgBox "Otis did not start." & vbCrLf & "Check data\server.log in " & baseDir, vbExclamation, "Otis"
         WScript.Quit 1
     End If
 End If

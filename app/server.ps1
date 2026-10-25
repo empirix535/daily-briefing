@@ -1,4 +1,4 @@
-# Daily Briefing server (v2, 2026-10-13 restart)
+# Otis server (v2, 2026-10-13 restart)
 # Main thread: tray icon + watchdog. Background threads: the HTTP listener (To-do, Notes, Streams) and the assistant.
 # Nothing here touches Outlook. Keep this file ASCII-only.
 Add-Type -AssemblyName System.Web, System.Windows.Forms, System.Drawing
@@ -22,6 +22,8 @@ $Config = @{
     SecretaryStart          = "08:00"   # working hours: scans, nags, alerts
     SecretaryEnd            = "18:00"
     SecretaryMaxCallsPerDay = 250       # Claude calls per day (chat answers and scans)
+    BotEmojiCode        = ":otis:"  # custom Teams emoji typed at the start of each bot message; "" = use the standard emoji. Falls back to it if Teams does not convert the code.
+    ToastAlerts         = $true     # Windows pop-up from the tray icon for reminders, meeting prompts and emails that need you (Teams never notifies for your own self-chat)
     MinimizeToTray      = $true     # minimizing the dashboard window hides it; the tray icon brings it back
     # Streams tab: work pipeline file (also edited by Claude Code); item paths are relative to its parent's parent (root)
     StreamsPath         = "$(if ($env:OneDriveCommercial) { $env:OneDriveCommercial } else { "$env:USERPROFILE\OneDrive" })\root\_admin\streams.json"   # override in settings.json
@@ -52,6 +54,7 @@ $LogPath = Join-Path $DataDir "server.log"
 $Url     = "http://localhost:$($Config.Port)/"
 $sync = [hashtable]::Synchronized(@{
     Config        = $Config
+    SecretaryToasts = [System.Collections.Queue]::Synchronized((New-Object System.Collections.Queue))
     Root          = $DataDir
     AppDir        = $AppDir
     BaseDir       = $BaseDir
@@ -296,9 +299,16 @@ $ServerLoop = {
 # ------------------------------------------------------------------
 # Main thread: start listener, assistant, tray icon, watchdog
 # ------------------------------------------------------------------
+# One server at a time. A second launch (for example the Startup shortcut and the launcher firing together) exits quietly
+# before it touches the log, so the running server keeps its log and no warning box appears.
+$script:InstanceMutex = New-Object System.Threading.Mutex($false, "Local\DailyBriefingServer-$($Config.Port)")
+$gotInstance = $false
+try { $gotInstance = $script:InstanceMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $gotInstance = $true } catch { $gotInstance = $true }
+if (-not $gotInstance) { exit 0 }
+
 try { if (Test-Path $LogPath) { Copy-Item $LogPath (Join-Path $DataDir "server.prev.log") -Force } } catch {}
 [System.IO.File]::WriteAllText($LogPath, "", [System.Text.Encoding]::UTF8)
-Write-Log "Starting Daily Briefing server (v2)."
+Write-Log "Starting Otis (v2)."
 if ($SettingsError) { Write-Log "settings.json could not be read, using defaults: $SettingsError" "WARN" }
 
 $listener = $null
@@ -308,7 +318,7 @@ for ($i = 0; $i -lt 10 -and -not $listener; $i++) {
 }
 if (-not $listener) {
     Write-Log "Port $($Config.Port) is in use. Another server may already be running." "ERROR"
-    [void][System.Windows.Forms.MessageBox]::Show("Port $($Config.Port) is already in use. The Daily Briefing server may already be running (check the system tray).", "Daily Briefing", "OK", "Warning")
+    [void][System.Windows.Forms.MessageBox]::Show("Port $($Config.Port) is already in use. Otis may already be running (check the system tray).", "Otis", "OK", "Warning")
     exit 1
 }
 $sync.Listener = $listener
@@ -345,7 +355,7 @@ $notify = New-Object System.Windows.Forms.NotifyIcon
 $iconPath = @("icons\agenda.ico", "icons\app_icon.ico") | ForEach-Object { Join-Path $AppDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
 try { $notify.Icon = New-Object System.Drawing.Icon($iconPath, [System.Windows.Forms.SystemInformation]::SmallIconSize) }
 catch { $notify.Icon = [System.Drawing.SystemIcons]::Application }
-$notify.Text = "Daily Briefing (localhost:$($Config.Port))"
+$notify.Text = "Otis (localhost:$($Config.Port))"
 
 function Get-BrowserPath {
     foreach ($exe in "chrome.exe", "msedge.exe") {
@@ -398,7 +408,7 @@ function Hide-DashboardIfMinimized {
         if ([DashWin]::Alive($script:DashHidden) -and -not [DashWin]::Visible($script:DashHidden)) { return }
         $script:DashHidden = [IntPtr]::Zero
     }
-    $h = [DashWin]::Find("Daily Briefing")
+    $h = [DashWin]::Find("Otis")
     if (-not $h.Equals([IntPtr]::Zero) -and [DashWin]::ShouldHide($h)) { [DashWin]::Hide($h); $script:DashHidden = $h }
 }
 # $true when a hidden dashboard window was brought back
@@ -416,7 +426,7 @@ function Open-Dashboard {
     if (Test-Path $exe) { Start-Process $exe } else { Start-Process (Get-BrowserPath) "--app=$Url --window-size=960,1350" }
 }
 function Show-Log {
-    $cmd = "`$host.UI.RawUI.WindowTitle = 'Daily Briefing log'; Get-Content -Path '$LogPath' -Wait -Tail 80"
+    $cmd = "`$host.UI.RawUI.WindowTitle = 'Otis log'; Get-Content -Path '$LogPath' -Wait -Tail 80"
     Start-Process powershell.exe -ArgumentList @("-NoProfile", "-Command", $cmd)
 }
 
@@ -439,14 +449,21 @@ function Stop-Server([string]$Reason, [bool]$Restart = $false) {
 }
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
-$miOpen = $menu.Items.Add("Open Dashboard")
+$miOpen = $menu.Items.Add("Open Otis")
 $miOpen.Font = New-Object System.Drawing.Font($miOpen.Font, [System.Drawing.FontStyle]::Bold)
 $miOpen.add_Click({ Open-Dashboard })
-$miLog = $menu.Items.Add("View Log")
+$miLog = $menu.Items.Add("View log")
 $miLog.add_Click({ Show-Log })
 
 # Start with Windows: a shortcut in the Startup folder that runs the launcher in the background
-$StartupLnk  = Join-Path ([Environment]::GetFolderPath("Startup")) "Daily Briefing.lnk"
+$StartupLnk  = Join-Path ([Environment]::GetFolderPath("Startup")) "Otis.lnk"
+# The app used to be called Daily Briefing. Rename its old shortcuts (Startup, Start menu, Desktop) once; the targets stay the same.
+foreach ($f in "Startup", "Programs", "Desktop") {
+    try {
+        $dir = [Environment]::GetFolderPath($f); $old = Join-Path $dir "Daily Briefing.lnk"; $new = Join-Path $dir "Otis.lnk"
+        if ((Test-Path $old) -and -not (Test-Path $new)) { Move-Item -LiteralPath $old -Destination $new; Write-Log "Renamed the $f shortcut to Otis." }
+    } catch { }
+}
 $LauncherExe = Join-Path $BaseDir "DailyBriefing.exe"
 $LauncherVbs = Join-Path $AppDir "launch.vbs"
 $miStartup = New-Object System.Windows.Forms.ToolStripMenuItem("Start with Windows")
@@ -461,7 +478,7 @@ $miStartup.add_Click({
             else { $lnk.TargetPath = "wscript.exe"; $lnk.Arguments = "`"$LauncherVbs`" /background" }
             $lnk.WorkingDirectory = $BaseDir
             if ($iconPath) { $lnk.IconLocation = "$iconPath,0" }
-            $lnk.Description = "Daily Briefing (starts in the background)"
+            $lnk.Description = "Otis (starts in the background)"
             $lnk.Save()
             Write-Log "Start with Windows: on."
         }
@@ -469,16 +486,13 @@ $miStartup.add_Click({
     $miStartup.Checked = Test-Path $StartupLnk
 })
 [void]$menu.Items.Add($miStartup)
-$miPause = New-Object System.Windows.Forms.ToolStripMenuItem("Pause assistant")
+$miPause = New-Object System.Windows.Forms.ToolStripMenuItem("Pause Otis")
 $miPause.add_Click({ $sync.SecretaryPauseToggle = $true })
 $miShowTeams = New-Object System.Windows.Forms.ToolStripMenuItem("Show Teams window")
 $miShowTeams.add_Click({ $sync.SecretaryShowWindow = -not [bool]$sync.SecretaryShowWindow; $miShowTeams.Checked = [bool]$sync.SecretaryShowWindow })
-$miPinChat = New-Object System.Windows.Forms.ToolStripMenuItem("Pin chat window")
-$miPinChat.add_Click({ $sync.SecretaryPinToggle = $true; $miPinChat.Checked = -not $miPinChat.Checked })
-$menu.add_Opening({ $miPinChat.Checked = [bool]$sync.SecretaryChatPin })
-if ($sec) { [void]$menu.Items.Add($miPause); [void]$menu.Items.Add($miShowTeams); [void]$menu.Items.Add($miPinChat) }
+if ($sec) { [void]$menu.Items.Add($miPause); [void]$menu.Items.Add($miShowTeams) }
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-$miRestart = $menu.Items.Add("Restart Server")
+$miRestart = $menu.Items.Add("Restart Otis")
 $miRestart.add_Click({ Stop-Server "Restart requested from tray" $true })
 $miExit = $menu.Items.Add("Exit")
 $miExit.add_Click({ Stop-Server "Exit requested from tray" })
@@ -503,21 +517,30 @@ $timer.add_Tick({
     if ($srv.Handle.IsCompleted -and -not $script:CrashSeen) {
         $script:CrashSeen = $true
         Write-Log "Listener thread stopped unexpectedly. $(($srv.PS.Streams.Error | Out-String).Trim())" "ERROR"
-        $notify.ShowBalloonTip(8000, "Daily Briefing", "Server error. Right-click the tray icon and choose Restart Server.", [System.Windows.Forms.ToolTipIcon]::Error)
+        $notify.ShowBalloonTip(8000, "Otis", "Otis hit a server error. Right-click the tray icon and choose Restart Otis.", [System.Windows.Forms.ToolTipIcon]::Error)
         return
     }
     if ($sec) {
         $miPause.Checked = [bool]$sync.SecretaryPaused
+        # Pop-ups queued by the assistant. Several at once become one, so none is lost behind the next.
+        if ($sync.SecretaryToasts.Count -gt 0) {
+            $items = @(); while ($sync.SecretaryToasts.Count -gt 0) { try { $items += $sync.SecretaryToasts.Dequeue() } catch { break } }
+            if ($items.Count) {
+                $txt = [string]$items[0]; if ($items.Count -gt 1) { $txt += " (+$($items.Count - 1) more)" }
+                if ($txt.Length -gt 250) { $txt = $txt.Substring(0, 247) + "..." }
+                try { $notify.ShowBalloonTip(10000, "Otis", $txt, [System.Windows.Forms.ToolTipIcon]::Info) } catch { }
+            }
+        }
         if ($sync.SecretaryAlert -and $sync.SecretaryAlert -ne $script:LastSecAlert) {
             $script:LastSecAlert = $sync.SecretaryAlert
-            $notify.ShowBalloonTip(8000, "Daily Briefing assistant", $sync.SecretaryAlert, [System.Windows.Forms.ToolTipIcon]::Warning)
+            $notify.ShowBalloonTip(8000, "Otis", $sync.SecretaryAlert, [System.Windows.Forms.ToolTipIcon]::Warning)
         } elseif (-not $sync.SecretaryAlert) { $script:LastSecAlert = $null }
         if ($sec.Handle.IsCompleted -and -not $script:SecCrashSeen) {
             $script:SecCrashSeen = $true
             $why = ($sec.PS.Streams.Error | Out-String).Trim()
             try { [void]$sec.PS.EndInvoke($sec.Handle) } catch { $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }; $why = "$why $($e.Message) $($e.ErrorRecord.InvocationInfo.PositionMessage)".Trim() }
             Write-Log "Assistant thread stopped unexpectedly. $why" "ERROR"
-            $notify.ShowBalloonTip(8000, "Daily Briefing assistant", "The assistant stopped. Right-click the tray icon and choose Restart Server.", [System.Windows.Forms.ToolTipIcon]::Error)
+            $notify.ShowBalloonTip(8000, "Otis", "Otis stopped. Right-click the tray icon and choose Restart Otis.", [System.Windows.Forms.ToolTipIcon]::Error)
         }
     }
     if ($sync.CloseAt -and $now -gt $sync.CloseAt) {
