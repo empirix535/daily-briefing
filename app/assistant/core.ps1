@@ -14,7 +14,7 @@ $RulesPath     = Join-Path $SecDir "rules.md"
 $VoicePath     = Join-Path $SecDir "voice.md"
 $ChatLogPath   = Join-Path $SecDir "chat-log.jsonl"
 $MeetingsPath  = Join-Path $SecDir "meetings.json"     # today's meetings, written by the scan (next update)
-$WorkDir       = Join-Path $env:TEMP "briefing-claude"
+$WorkDir       = Join-Path $env:TEMP "otis-claude"
 if (-not (Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir | Out-Null }
 
 $Tag     = [char]::ConvertFromUtf32(0x1F419)   # octopus: the marker at the start of every bot message

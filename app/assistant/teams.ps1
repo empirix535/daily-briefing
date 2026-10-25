@@ -34,7 +34,15 @@ public static class SecWin {
 }
 "@
 
-$ProfileDir = Join-Path $env:LOCALAPPDATA "DailyBriefing\teams-profile"
+# The Teams window's Chrome profile stays on this PC (outside the install folder, which may sync to OneDrive)
+$ProfileDir = if ([string]$Config.TeamsProfileDir) { [string]$Config.TeamsProfileDir } else { Join-Path $env:LOCALAPPDATA "Otis\teams-profile" }
+$OldProfileDir = Join-Path $env:LOCALAPPDATA "DailyBriefing\teams-profile"
+if (-not [string]$Config.TeamsProfileDir -and (Test-Path $OldProfileDir) -and -not (Test-Path $ProfileDir)) {
+    try {
+        New-Item -ItemType Directory -Path (Split-Path $ProfileDir -Parent) -Force | Out-Null
+        Move-Item -LiteralPath $OldProfileDir -Destination $ProfileDir   # keeps the Teams sign-in from the earlier name
+    } catch { }
+}
 function Get-TeamsChromePid {
     $p = Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -and $_.CommandLine -like "*$ProfileDir*" -and $_.CommandLine -notlike "*--type=*" } |

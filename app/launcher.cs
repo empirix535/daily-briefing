@@ -1,11 +1,11 @@
-// Otis launcher (built into DailyBriefing.exe by Install.ps1 with the C# compiler included in Windows).
+// Otis launcher (compiled into Otis.exe by installer\build.ps1).
 //   1. Starts app\server.ps1 hidden (tray icon only) if the server is not already running.
 //   2. Opens the dashboard window (Chrome, else Edge), or brings it to the front if it is already open
 //      (including a window the tray app hid when it was minimized).
 //      Skipped with --background (used by "Start with Windows").
 //   3. Tags the window with the app's taskbar ID, so it shares one taskbar button with the pinned launcher,
 //      and pinning the open window pins this launcher (with its icon) instead of Chrome.
-//   --register-shortcut "<path.lnk>" tags a shortcut with the same ID (used by Install.ps1).
+//   --register-shortcut "<path.lnk>" tags a shortcut with the same ID (used by the installer).
 // Written for C# 5 so it compiles with the .NET Framework 4.x compiler.
 using System;
 using System.Diagnostics;
@@ -22,7 +22,7 @@ using Microsoft.Win32;
 
 static class Program
 {
-    const string AppId = "DailyBriefing.Dashboard";
+    const string AppId = "Otis.App";
     const string WindowTitle = "Otis";
 
     [STAThread]
@@ -44,7 +44,7 @@ static class Program
         {
             if (!ServerUp(url))
             {
-                if (!File.Exists(server)) { Warn("Could not find app\\server.ps1 next to DailyBriefing.exe."); return 1; }
+                if (!File.Exists(server)) { Warn("Could not find app\\server.ps1 next to Otis.exe."); return 1; }
                 ProcessStartInfo psi = new ProcessStartInfo("powershell.exe",
                     "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + server + "\"");
                 psi.UseShellExecute = false;

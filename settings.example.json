@@ -1,5 +1,5 @@
 {
-    "_help": "Copy this file to settings.json (Install.cmd does it for you). settings.json stays on your PC and is not uploaded to GitHub.",
+    "_help": "Your personal settings. Setup created this file for you. Edit it any time, then restart Otis from the tray menu.",
     "UserName": "Alex",
     "UserDescription": "a researcher at Example Org",
     "UserEmail": "alex@example.org",
@@ -9,9 +9,7 @@
         "example.org"
     ],
     "_help_contacts": "Nicknames the assistant understands, for example \"email Sam\".",
-    "Contacts": {
-        "sam": "sam@example.org"
-    },
+    "Contacts": {},
     "_help_models": "SecretaryModel answers chat messages (haiku is fastest). SecretaryThinkModel runs mail and calendar scans, note clean-up, and the Notes editor.",
     "SecretaryEnabled": true,
     "SecretaryModel": "haiku",
@@ -26,7 +24,8 @@
     "SecretaryStart": "08:00",
     "SecretaryEnd": "18:00",
     "SecretaryMaxCallsPerDay": 250,
-    "_help_streams": "Optional. Full path to your streams.json (Streams tab). Defaults to <OneDrive>\\root\\_admin\\streams.json.",
+    "_help_streams": "StreamsPath is the file behind the Streams tab. Leave it out to use data\\streams.json. StreamsRoot is the folder each stream's relative path starts from.",
+    "_help_backup": "BackupPath is a folder for a daily copy of your data (two weeks of dated copies). Leave it out for no backup.",
     "_help_tray": "MinimizeToTray hides the Otis window when you minimize it. Click the tray icon to bring it back.",
     "MinimizeToTray": true,
     "_help_alerts": "ToastAlerts shows a Windows pop-up from the tray icon for reminders, meeting prompts, and emails that need you. Teams does not notify for messages you post to yourself.",

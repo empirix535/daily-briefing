@@ -129,7 +129,7 @@ $global:ClaudeJobs = @{}
 function Start-ClaudeJob([string]$Prompt, [string]$Model) {
     $exe = Resolve-ClaudeExe
     if (-not $exe) { throw "Claude Code CLI not found." }
-    $work = Join-Path $env:TEMP "briefing-claude"
+    $work = Join-Path $env:TEMP "otis-claude"
     if (-not (Test-Path $work)) { New-Item -ItemType Directory -Path $work | Out-Null }
     $sys = "You are a careful writing assistant. Follow the instructions in the user message exactly and answer with JSON only."
     $cliArgs = "-p --output-format json --model $Model --tools `"`" --strict-mcp-config --system-prompt `"$sys`""

@@ -1,16 +1,14 @@
 # ================================================================== assistant/main.ps1
 # Daily backup and the main loop.
 
-# Daily backup of personal data to OneDrive (restored by Install.cmd)
+# Daily backup of personal data to BackupPath (set in settings.json; blank = no backup)
 $BackupFiles = @("settings.json", "data\todo.json",
                  "data\secretary\rules.md", "data\secretary\voice.md", "data\secretary\reminders.json",
                  "data\secretary\state.json", "data\secretary\chat-log.jsonl")
 function Backup-PersonalData {
-    $od = @($env:OneDriveCommercial, $env:OneDrive) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    if (-not $od) { Write-Log "No OneDrive folder found; skipped the backup." "WARN"; return }
-    $root = Join-Path $od "Otis backup"
-    $oldRoot = Join-Path $od "Daily Briefing backup"   # the folder's old name: rename it once so earlier backups carry over
-    if ((Test-Path $oldRoot) -and -not (Test-Path $root)) { try { Rename-Item -LiteralPath $oldRoot -NewName "Otis backup" } catch { Write-Log "Could not rename the backup folder: $($_.Exception.Message)" "WARN" } }
+    $root = [string]$Config.BackupPath
+    if (-not $root) { return }
+    if (-not (Test-Path (Split-Path $root -Parent))) { Write-Log "Backup folder's parent not found: $root" "WARN"; return }
     $latest = Join-Path $root "latest"
     $n = 0
     foreach ($rel in $BackupFiles) {

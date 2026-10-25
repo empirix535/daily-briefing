@@ -25,8 +25,11 @@ $Config = @{
     BotEmojiCode        = ":otis:"  # custom Teams emoji typed at the start of each bot message; "" = use the standard emoji. Falls back to it if Teams does not convert the code.
     ToastAlerts         = $true     # Windows pop-up from the tray icon for reminders, meeting prompts and emails that need you (Teams never notifies for your own self-chat)
     MinimizeToTray      = $true     # minimizing the dashboard window hides it; the tray icon brings it back
-    # Streams tab: work pipeline file (also edited by Claude Code); item paths are relative to its parent's parent (root)
-    StreamsPath         = "$(if ($env:OneDriveCommercial) { $env:OneDriveCommercial } else { "$env:USERPROFILE\OneDrive" })\root\_admin\streams.json"   # override in settings.json
+    # Streams tab: work pipeline file (also edited by Claude Code); item paths are relative to StreamsRoot
+    StreamsPath         = ""        # blank = data\streams.json in the install folder (created on first use)
+    StreamsRoot         = ""        # folder that each stream's relative path starts from; blank = two levels above the streams file
+    BackupPath          = ""        # folder for the daily backup of your data; blank = no backup
+    TeamsProfileDir     = ""        # Chrome profile for the Teams window; blank = %LOCALAPPDATA%\Otis\teams-profile
     Port                = 8000
     HeartbeatTimeoutSec = 150
     CloseGraceSec       = 8
@@ -50,6 +53,7 @@ if (Test-Path $SettingsPath) {
         }
     } catch { $SettingsError = $_.Exception.Message }
 }
+if (-not [string]$Config.StreamsPath) { $Config.StreamsPath = Join-Path $DataDir "streams.json" }
 $LogPath = Join-Path $DataDir "server.log"
 $Url     = "http://localhost:$($Config.Port)/"
 $sync = [hashtable]::Synchronized(@{
@@ -64,6 +68,33 @@ $sync = [hashtable]::Synchronized(@{
     CloseAt       = $null
     Busy          = $false
 })
+
+# A new install has no streams file: write an empty one so the Streams tab opens with the standard pipelines.
+function New-StreamsStarter([string]$Path) {
+    try {
+        $dir = Split-Path $Path -Parent
+        if (-not (Test-Path $dir)) { return }
+        $json = @'
+{
+  "pipelines": {
+    "paper": ["Idea", "Drafting", "Co-author review", "Internal revise", "Submitted", "R&R", "Resubmitted", "Accepted", "Published"],
+    "report": ["Planning", "Drafting", "Review", "Revision", "Published"],
+    "whitepaper": ["Planning", "Drafting", "Review", "Revision", "Published"],
+    "software": ["Planning", "Building", "Testing", "Released"]
+  },
+  "rules": {
+    "completeOnStage": { "paper": "Published", "report": "Published", "whitepaper": "Published", "software": "Released" },
+    "dueShownFor": { "paper": "all stages", "report": "all stages", "whitepaper": "all stages", "software": "all stages" },
+    "inactivityFlagDays": 60
+  },
+  "ideas": [],
+  "items": []
+}
+'@
+        [System.IO.File]::WriteAllText($Path, $json, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Log "Created an empty streams file at $Path."
+    } catch { Write-Log "Could not create the streams file: $($_.Exception.Message)" "WARN" }
+}
 
 function Write-Log([string]$Msg, [string]$Level = "INFO") {
     $line = "{0} [{1}] {2}`r`n" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Msg
@@ -150,6 +181,7 @@ $ServerLoop = {
                 $sp = [string]$Config.StreamsPath
                 $utf8 = New-Object System.Text.UTF8Encoding($false)
                 try {
+                    if (-not (Test-Path $sp)) { New-StreamsStarter $sp }
                     if (-not (Test-Path $sp)) { throw "streams.json not found at $sp" }
                     if ($request.HttpMethod -eq "POST") {
                         $reader = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
@@ -169,7 +201,7 @@ $ServerLoop = {
                     } else {
                         $text = [System.IO.File]::ReadAllText($sp)
                         $mt = [string](Get-Item $sp).LastWriteTimeUtc.Ticks
-                        $root = Split-Path (Split-Path $sp -Parent) -Parent
+                        $root = if ([string]$Config.StreamsRoot) { [string]$Config.StreamsRoot } else { Split-Path (Split-Path $sp -Parent) -Parent }
                         $act = @{}
                         foreach ($it in @(($text | ConvertFrom-Json).items | Where-Object { $_.status -eq "active" -and $_.path })) {
                             $dir = Join-Path $root ([string]$it.path -replace '/', '\')
@@ -301,7 +333,7 @@ $ServerLoop = {
 # ------------------------------------------------------------------
 # One server at a time. A second launch (for example the Startup shortcut and the launcher firing together) exits quietly
 # before it touches the log, so the running server keeps its log and no warning box appears.
-$script:InstanceMutex = New-Object System.Threading.Mutex($false, "Local\DailyBriefingServer-$($Config.Port)")
+$script:InstanceMutex = New-Object System.Threading.Mutex($false, "Local\OtisServer-$($Config.Port)")
 $gotInstance = $false
 try { $gotInstance = $script:InstanceMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $gotInstance = $true } catch { $gotInstance = $true }
 if (-not $gotInstance) { exit 0 }
@@ -352,7 +384,7 @@ if ($Config.SecretaryEnabled) {
 
 # Tray icon
 $notify = New-Object System.Windows.Forms.NotifyIcon
-$iconPath = @("icons\agenda.ico", "icons\app_icon.ico") | ForEach-Object { Join-Path $AppDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+$iconPath = @("icons\agenda.ico") | ForEach-Object { Join-Path $AppDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
 try { $notify.Icon = New-Object System.Drawing.Icon($iconPath, [System.Windows.Forms.SystemInformation]::SmallIconSize) }
 catch { $notify.Icon = [System.Drawing.SystemIcons]::Application }
 $notify.Text = "Otis (localhost:$($Config.Port))"
@@ -422,7 +454,7 @@ function Restore-Dashboard {
 }
 function Open-Dashboard {
     if (Restore-Dashboard) { return }
-    $exe = Join-Path $BaseDir "DailyBriefing.exe"
+    $exe = Join-Path $BaseDir "Otis.exe"
     if (Test-Path $exe) { Start-Process $exe } else { Start-Process (Get-BrowserPath) "--app=$Url --window-size=960,1350" }
 }
 function Show-Log {
@@ -457,15 +489,7 @@ $miLog.add_Click({ Show-Log })
 
 # Start with Windows: a shortcut in the Startup folder that runs the launcher in the background
 $StartupLnk  = Join-Path ([Environment]::GetFolderPath("Startup")) "Otis.lnk"
-# The app used to be called Daily Briefing. Rename its old shortcuts (Startup, Start menu, Desktop) once; the targets stay the same.
-foreach ($f in "Startup", "Programs", "Desktop") {
-    try {
-        $dir = [Environment]::GetFolderPath($f); $old = Join-Path $dir "Daily Briefing.lnk"; $new = Join-Path $dir "Otis.lnk"
-        if ((Test-Path $old) -and -not (Test-Path $new)) { Move-Item -LiteralPath $old -Destination $new; Write-Log "Renamed the $f shortcut to Otis." }
-    } catch { }
-}
-$LauncherExe = Join-Path $BaseDir "DailyBriefing.exe"
-$LauncherVbs = Join-Path $AppDir "launch.vbs"
+$LauncherExe = Join-Path $BaseDir "Otis.exe"
 $miStartup = New-Object System.Windows.Forms.ToolStripMenuItem("Start with Windows")
 $miStartup.Checked = Test-Path $StartupLnk
 $miStartup.add_Click({
@@ -474,8 +498,7 @@ $miStartup.add_Click({
         else {
             $wsh = New-Object -ComObject WScript.Shell
             $lnk = $wsh.CreateShortcut($StartupLnk)
-            if (Test-Path $LauncherExe) { $lnk.TargetPath = $LauncherExe; $lnk.Arguments = "--background" }
-            else { $lnk.TargetPath = "wscript.exe"; $lnk.Arguments = "`"$LauncherVbs`" /background" }
+            $lnk.TargetPath = $LauncherExe; $lnk.Arguments = "--background"
             $lnk.WorkingDirectory = $BaseDir
             if ($iconPath) { $lnk.IconLocation = "$iconPath,0" }
             $lnk.Description = "Otis (starts in the background)"
